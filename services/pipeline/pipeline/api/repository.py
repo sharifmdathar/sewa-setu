@@ -23,7 +23,15 @@ from pipeline.store.jsonstore import JsonStore
 APPLICATIONS = "applications"
 REPORTS = "reports"
 QUEUE_STATUS = "scrutiny_done"
-OPEN_STATUSES = ("submitted", "documents_uploaded", "scrutiny_pending", "scrutiny_done")
+# `info_requested` is still open work - the ball is with the citizen, and the contract keeps
+# it distinct from `decided` for that reason - so it counts as pending, not decided.
+OPEN_STATUSES = (
+    "submitted",
+    "documents_uploaded",
+    "scrutiny_pending",
+    "scrutiny_done",
+    "info_requested",
+)
 EVAL_REPORTS_DIR = Path(__file__).resolve().parents[4] / "eval" / "reports"
 
 
