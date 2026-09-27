@@ -31,8 +31,13 @@ or to measure what a model actually reads back.
 | Read-back scorer | `eval/image_leg.py`, `eval/image_leg_md.py` | Compares a read against that manifest: field recall **and** precision, whole-document clean reads, per-field and per-type breakdowns. `--reader text` runs the same documents through the deterministic parser as a control that should score 1.00. |
 | Provenance | `eval/runner.py`, `eval/report_md.py` | The report says which extractor, adjudicator, model and cache state produced it, and titles itself `rules-only` or `live model leg`. |
 
-The attempt budget is unchanged at `max_retries + 1` calls per document; falling back out of
-JSON mode spends an attempt rather than adding one.
+The attempt budget is `max_retries + 1` calls per document, and that is now literally true: the
+SDK's own retry layer is switched off in `new_client()`, because the two layers multiply rather
+than nest — with both on, the budget cost up to its square in real HTTP requests, and a 429 was
+answered by the SDK's blind backoff before this loop could read its `Retry-After`. Falling back out
+of JSON mode spends an attempt rather than adding one. `tests/fake_endpoint.py` is a local
+OpenAI-compatible endpoint that counts requests over a socket, so the budget, the retry and the
+cache are all asserted without an `LLM_API_KEY`.
 
 ## Choosing an endpoint (checked on this machine, 2026-09-27)
 
@@ -111,6 +116,17 @@ Against the real corpus, no endpoint at all (`python -m eval.image_leg --reader 
   agree, which is what makes the model's future score interpretable.
 - `--reader model` with no key exits 2 with the command that fixes it, rather than scoring pixels
   with a text parser and reporting zero.
+
+Now committed as tests, so this file is a description rather than a claim
+(`python -m pytest -q tests/test_llm_http.py`, no key, loopback only):
+
+- a 429 twice, then served — **3 requests, the documented budget**, and the run completes;
+- a model that rejects `response_format` is asked a second time without it, and request two
+  demonstrably carries no `response_format`;
+- the same read twice costs **one** request — the disk cache works through a real socket;
+- a 401 stops at one request rather than burning a quota on a reply that will never change;
+- `run_scrutiny` over HTTP yields five evidence-carrying checks and a `modelMeta` naming the
+  *served* model, which is not necessarily the requested one on a router.
 
 What none of that covers: a real model's answer quality. The plumbing and the yardstick are both
 proven; the numbers from a real endpoint are still to be produced.

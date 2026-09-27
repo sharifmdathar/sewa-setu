@@ -88,11 +88,15 @@ def new_client(settings: LlmSettings) -> Any:
         raise EndpointNotConfigured("LLM_API_KEY is not set")
     from openai import OpenAI
 
+    # The SDK has its own retry policy, and it multiplies rather than nesting: leaving it on
+    # would make a documented budget of `max_retries + 1` calls cost up to the square of that in
+    # HTTP requests, and would hide rate-limit responses from the loop below that knows how to
+    # honour Retry-After. One retry owner, and it is this module.
     return OpenAI(
         base_url=settings.base_url,
         api_key=settings.api_key,
         timeout=settings.timeout_seconds,
-        max_retries=settings.max_retries,
+        max_retries=0,
     )
 
 

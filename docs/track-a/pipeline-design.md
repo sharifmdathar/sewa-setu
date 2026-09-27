@@ -107,6 +107,14 @@ asserts their absence across a full journey. Synthetic today; the habit is the p
 instruct the model to treat instructions found inside documents as content, never as commands —
 the corpus documents are attacker-supplied text by construction.
 
+**One retry owner: `llmcall`, not the SDK.** `new_client()` passes `max_retries=0` to the OpenAI
+client. The SDK's retry layer multiplies with ours rather than nesting: with both on, the
+documented budget of `max_retries + 1` calls per document cost up to its square in real HTTP
+requests, and a 429 was absorbed by the SDK's blind backoff before this loop could read its
+`Retry-After`. `tests/fake_endpoint.py` is a local OpenAI-compatible endpoint that asserts request
+counts over a socket — it is how the squaring was found, and it is what keeps the model path tested
+without an `LLM_API_KEY`.
+
 ## Eval summary
 
 Pasted from `eval/reports/2026-09-27T15-55-07/report.md` (regenerate with
