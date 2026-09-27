@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pipeline.api.evalfeed import judged_nothing
+
 from eval.dataset import CHECKS
 
 
@@ -19,7 +21,13 @@ def _met(value: float, target: float) -> str:
 
 
 def _gate_line(payload: dict[str, Any]) -> str:
-    """The verdict `eval/gate.py` would reach on this same payload, spelled out."""
+    """The verdict `eval/gate.py` reaches on this same payload, spelled out.
+
+    Both numbers clearing their targets is not the whole test: on a sample that planted nothing
+    and predicted nothing, precision and recall are both 1.000 by arithmetic, and this file - the
+    one the submission pastes - would read as acceptance while the gate CLI said otherwise. The
+    two must not disagree, so the renderer asks the gate's own question.
+    """
     flags = payload["failFlags"]
     thresholds = payload["thresholds"]
     breaching = [
@@ -30,6 +38,12 @@ def _gate_line(payload: dict[str, Any]) -> str:
         )
         if flags[flag_key] < thresholds[threshold_key]
     ]
+    if judged_nothing(payload):
+        breaching.insert(
+            0,
+            "nothing was judged: 0 planted and 0 predicted check failures across "
+            f"{payload['dataset']['applications']} applications - run without --limit",
+        )
     if not breaching:
         return (
             f"**PASS** - fail-flag precision {flags['precision']:.3f} and recall "
@@ -190,7 +204,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
         _gate_line(payload),
         "",
-        "`python -m eval.gate` exits 0 only when both rows above clear their target. This is the",
+        "`python -m eval.gate` exits 0 only when the run judged something *and* both rows above",
+        "clear their target. This is the",
         "file the submission quotes (SPEC.md section 8.2), so it states the verdict instead of",
         "leaving it to be inferred from the table.",
         "",

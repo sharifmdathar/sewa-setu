@@ -182,6 +182,23 @@ def test_the_markdown_reports_a_breach_as_a_breach(tmp_path: Path) -> None:
     assert "| Fail-flag precision | unmeasured | 0.80 (NOT met)" in markdown
 
 
+def test_the_reports_verdict_and_the_gate_cannot_disagree(tmp_path: Path) -> None:
+    """`report.md` is pasted into slides; it must never read as acceptance the CLI denies."""
+
+    def emptied(payload: dict[str, object]) -> dict[str, object]:
+        flags = dict(payload["failFlags"])  # type: ignore[typeddict-item]
+        flags.update(support=0, predicted=0, truePositive=0, falsePositive=0, falseNegative=0)
+        payload = {**payload, "failFlags": flags}
+        return {**payload, "dataset": {**payload["dataset"], "applications": 2, "anomalous": 0}}  # type: ignore[arg-type]
+
+    vacuous = emptied(report_payload(precision=1.0, recall=1.0))
+    measured = report_payload(precision=1.0, recall=1.0)
+
+    assert violations(vacuous) != [] and "**FAIL**" in render_markdown(vacuous)
+    assert "nothing was judged" in render_markdown(vacuous)
+    assert violations(measured) == [] and "**PASS**" in render_markdown(measured)
+
+
 def test_the_gate_exits_on_the_newest_report_only(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
