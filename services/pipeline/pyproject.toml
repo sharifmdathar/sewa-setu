@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = ["fastapi", "pydantic>=2", "httpx", "openai", "PyYAML"]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "ruff", "uvicorn"]
 
 [tool.setuptools.packages.find]
 include = ["pipeline*"]
