@@ -26,6 +26,7 @@ from pipeline.extraction import (
     TemplateExtractor,
 )
 from pipeline.fraud.scorer import score_fraud
+from pipeline.logs import get_logger, warning
 from pipeline.rules import (
     DocEvidence,
     RuleConfig,
@@ -35,6 +36,8 @@ from pipeline.rules import (
     run_rules,
 )
 from pipeline.rules.models import CheckConfig, CheckSeverity, CheckStatus
+
+LOGGER = get_logger("agent.report")
 
 
 def sha256_of_content(document: DocumentContent) -> str:
@@ -65,7 +68,17 @@ def _evidence_of(document: DocumentContent, extractor: DocumentExtractor) -> Doc
     """
     try:
         fields = extractor.extract(document)
-    except ExtractionError:
+    except ExtractionError as exc:
+        # Whether a file could be read is C3's finding to report, not a reason to lose the
+        # whole run - but it must not be silent either, or a bad extractor looks like fraud.
+        warning(
+            LOGGER,
+            "document unreadable",
+            documentId=document.document_id,
+            fileName=document.file_name,
+            extractor=extractor.name,
+            reason=str(exc),
+        )
         fields = ExtractedFields(doc_type=document.doc_type)
     return DocEvidence(
         documentId=document.document_id,
@@ -110,7 +123,16 @@ def _adjudicate(
             continue
         try:
             verdict = adjudicator.adjudicate(check, data)
-        except AdjudicationError:
+        except AdjudicationError as exc:
+            # The rule verdict stands; the officer just does not get the plain-language rewrite.
+            warning(
+                LOGGER,
+                "adjudication failed, keeping rule verdict",
+                applicationId=data.application_id,
+                checkId=check.check_id,
+                adjudicator=adjudicator.name,
+                reason=str(exc),
+            )
             settled.append(check)
             continue
         settled.append(_settle(check, verdict, config.checks[check.check_id]))
