@@ -93,3 +93,4 @@ class RuleConfig(CamelModel):
     severity_multipliers: dict[str, float]
     recommendation_thresholds: dict[str, int]
     authority_expectations: dict[str, str] = Field(default_factory=dict)
+    expiry_expected_doc_types: list[str] = Field(default_factory=list)

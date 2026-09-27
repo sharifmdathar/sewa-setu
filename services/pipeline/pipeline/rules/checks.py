@@ -148,6 +148,13 @@ def check_document_validity(data: ScrutinyInput, config: RuleConfig) -> Scrutiny
                     f"{document.file_name}: expired {fields.expiry_date.isoformat()}, "
                     f"{days} day(s) before {data.as_of.isoformat()}"
                 )
+        elif document.doc_type in config.expiry_expected_doc_types:
+            # Silence here used to be indistinguishable from validity: an expiry the extractor
+            # never read cannot fail the check, and on a model-read corpus it often was not read.
+            warnings.append(
+                f"{document.file_name}: {document.doc_type} is issued with an expiry date "
+                "but none could be read"
+            )
         expected = config.authority_expectations.get(document.doc_type)
         if fields.issuing_authority is None:
             warnings.append(f"{document.file_name}: no issuing authority could be read")
@@ -172,8 +179,9 @@ def check_document_validity(data: ScrutinyInput, config: RuleConfig) -> Scrutiny
             config,
             "warn",
             f"Dating or issuer concerns: {_quote(warnings)}.",
-            "The dates are possible but the issuing authority looks doubtful, so the document "
-            "should be eyeballed before approval.",
+            "The dates that were read are possible, but the dating is incomplete or the issuing "
+            "authority looks doubtful, so the document should be eyeballed before approval. An "
+            "unread expiry date is a check that has not happened, not a passed one.",
         )
     if dated == 0:
         return _build(

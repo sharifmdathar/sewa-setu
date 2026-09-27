@@ -81,6 +81,25 @@ def test_c2_fails_when_expiry_precedes_issue() -> None:
     assert "before it was issued" in result.evidence
 
 
+def test_c2_warns_when_an_expiring_document_type_states_no_expiry() -> None:
+    """A dropped expiry read used to read as validity: C2 cannot fail a date it was never given.
+
+    This is not hypothetical - a live VLM read `expiryDate` on 4 of the 18 documents that state
+    one, so on the model path silence is the common case rather than the edge case.
+    """
+    unread = make_doc("aadhaar", expiry=None)
+    result = check_document_validity(make_input([unread]), CONFIG)
+
+    assert result.status == "warn"
+    assert "expiry date" in result.evidence and "none could be read" in result.evidence
+    assert "not a passed one" in result.explanation
+
+
+def test_c2_still_passes_a_document_type_that_never_expires() -> None:
+    perpetual = make_doc("fee_receipt", authority="Fictiona Seva Kendra", expiry=None)
+    assert check_document_validity(make_input([perpetual]), CONFIG).status == "pass"
+
+
 def test_c2_warns_when_the_issuer_does_not_match() -> None:
     dodgy = make_doc("aadhaar", authority="Corner Shop Printers")
     result = check_document_validity(make_input([dodgy]), CONFIG)

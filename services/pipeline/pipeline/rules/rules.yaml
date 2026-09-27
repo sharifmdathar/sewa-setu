@@ -66,3 +66,18 @@ authorityExpectations:
   affidavit: Notary Public
   fee_receipt: Fictiona Seva Kendra
   voter_id: Chief Electoral Officer
+
+# Document types that are issued *with* an expiry date (fee_receipt never expires). A read that
+# finds none on one of these is usually a field the extractor missed rather than a perpetual
+# document - and C2 cannot fail an expired document whose expiry date it never saw. Measured:
+# a live VLM read expiryDate on only 4 of the 18 documents that state one.
+expiryExpectedDocTypes:
+  - aadhaar
+  - bank_statement
+  - revenue_record
+  - school_certificate
+  - parent_caste_certificate
+  - self_income_declaration
+  - electricity_bill
+  - affidavit
+  - voter_id
