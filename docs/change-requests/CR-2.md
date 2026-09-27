@@ -17,7 +17,7 @@ returns **only pending** applications, the `decided` filter will always come up
 empty in real mode. Track B's mock already returns all statuses so the feature
 demos correctly, but real-mode parity depends on Track A.
 
-(This is the same "queue excludes decided" limitation noted in CR-1.)
+(This is the same "queue excludes decided" limitation noted in CR-3.)
 
 ## Proposed change (behavioural; NO schema change needed)
 `GET /officer/queue` returns **all** applications (pending + decided), each as a

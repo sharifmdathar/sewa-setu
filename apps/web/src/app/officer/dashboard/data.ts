@@ -1,6 +1,6 @@
 // Pure, component-free derivations for the officer dashboard (B6).
 // Cards come straight from MetricsSummary; the two charts are derived here from
-// QueueItem[] as the CR-1 stopgap (see docs/change-requests/CR-1.md).
+// QueueItem[] as the CR-3 stopgap (see docs/change-requests/CR-3.md).
 
 import type { QueueItem } from "@/lib/api/types";
 import { riskBand, type RiskBand } from "@/components/RiskMeter";

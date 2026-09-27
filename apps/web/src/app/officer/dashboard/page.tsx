@@ -1,6 +1,6 @@
 // B6 — officer metrics dashboard. Cards are 100% getMetrics. Charts use the
-// CR-1 stopgap (getQueue) since the frozen MetricsSummary has no series fields;
-// see docs/change-requests/CR-1.md.
+// CR-3 stopgap (getQueue) since the frozen MetricsSummary has no series fields;
+// see docs/change-requests/CR-3.md.
 
 import Link from "next/link";
 import { getApiClient } from "@/lib/api/client";
