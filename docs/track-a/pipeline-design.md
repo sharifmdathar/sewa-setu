@@ -18,6 +18,7 @@ Written at the end of A9. Prompts A1–A9 are committed on `track-a`; this is th
 | `pipeline/store/` | `JsonStore` | one JSON file per record, atomic replace, process-wide lock |
 | `pipeline/api/` | `create_app(store_root)` | the ten contract paths, service catalog, application state machine, queue, metrics |
 | `pipeline/api/readmodel.py` | `queue_items`, `metrics`, `open_count` | the two read paths as pure functions of records + a report lookup: CR-2's queue, CR-3's series, "what counts as open" |
+| `pipeline/api/readmodel.py` | `queue_items`, `metrics`, `open_count` | the two read paths as pure functions over records + a report lookup: CR-2's queue, CR-3's series, the one definition of "open" |
 | `pipeline/api/evalfeed.py` | `newest_eval_report`, `latest_eval_metrics` | reads the harness's newest `report.json` once, shared by `/metrics/summary` and `eval.gate` |
 | `pipeline/logs.py` | `configure`, `event`, `warning` | one JSON object per line, context-carrying |
 | `eval/` | `python -m eval.runner`, `python -m eval.gate` | offline pass over dataset-v1 vs ground truth, `report.{json,md}`, SPEC threshold gate |
