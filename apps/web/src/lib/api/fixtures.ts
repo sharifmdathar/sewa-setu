@@ -235,10 +235,11 @@ export function seedStore(): MockStore {
   return { services, applications, documentsByApp, reportsByApp, scrutinyDurationsMs: [4200, 5100, 3900, 4700, 4400, 4000], seq: 1008 };
 }
 
-/** Build QueueItems from the store: everything not yet decided, risk desc. */
+/** Build QueueItems from the store: every application (incl. decided), risk desc.
+ *  Consumers filter by status — the officer queue surfaces decided on demand,
+ *  while the dashboard charts and the citizen list keep pending-only views. */
 export function buildQueue(store: MockStore): QueueItem[] {
   return store.applications
-    .filter((a) => a.status !== "decided")
     .map((a) => ({
       applicationId: a.id,
       serviceId: a.serviceId,
