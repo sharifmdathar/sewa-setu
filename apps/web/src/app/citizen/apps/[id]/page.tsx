@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { getApiClient } from "@/lib/api/client";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatFieldValue, parseFieldSchema } from "@/lib/fields";
+import { StatusFeed } from "./status-feed";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,6 @@ const NEXT_STEP: Record<string, string> = {
   decided: "A decision has been made — see the latest update below.",
   info_requested: "We need something more from you — see the latest update below.",
 };
-
-function actorIcon(actor: string): string {
-  if (actor === "officer") return "👤";
-  if (actor === "system") return "⚙";
-  return "🙋";
-}
 
 export default async function TimelinePage({
   params,
@@ -70,29 +65,7 @@ export default async function TimelinePage({
         </dl>
       </section>
 
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Updates
-        </h2>
-        <ol className="space-y-3">
-          {[...application.timeline].reverse().map((ev, i) => (
-            <li
-              key={`${ev.at}-${ev.event}-${i}`}
-              className="flex gap-3 rounded-lg border border-zinc-200 bg-white p-4"
-            >
-              <span aria-hidden="true" className="text-lg">
-                {actorIcon(ev.actor)}
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm">{ev.message}</p>
-                <p className="mt-0.5 text-xs text-zinc-400">
-                  {new Date(ev.at).toLocaleString()} · {ev.actor}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <StatusFeed applicationId={application.id} initial={application.timeline} />
 
       <div className="flex gap-4 text-sm">
         <Link href="/citizen" className="underline text-zinc-600">
