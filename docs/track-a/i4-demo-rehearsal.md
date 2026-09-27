@@ -64,6 +64,36 @@ C5 pass  No reused document files or suspiciously padded amounts were found in t
 Two independent signals, one file name each, both traceable to a stored document the officer can
 now fetch by name through CR-1's endpoint. This is the SPEC §8.3 "every check has evidence" line.
 
+## Second pass, and the one thing that moved
+
+SPEC §8.5 asks for the script to be *rehearsed*, so the whole walk ran again against a freshly
+seeded scratch store (`/tmp/i4-run2`, port 8124) after the model-leg commit landed and changed
+`pipeline/agent/adjudicator.py`. Same server code path, second store, later clock:
+
+| Beat | Pass 1 | Pass 2 |
+| --- | --- | --- |
+| J1c document hashes | `b4f97420b5e1`, `ee435a068d33` | identical |
+| J2 verdict | 200 in 4.0 ms, risk 39, `request_info` | 200 in 5.1 ms, risk 39, `request_info` |
+| J2 five explanations | as quoted above | identical, wording for word |
+| J3a queue | 21 items, 100 / 95 / 87 | 21 items, 100 / 95 / 87 |
+| J3b C5 evidence | duplicate hash + order-of-ten amount | identical string |
+| J3c/J4 decision + timeline | `info_requested`, `decision_request_info` | identical |
+| 4:00 band histogram | `{low 14, medium 4, high 3}` | `{low 17, medium 1, high 3}` |
+
+Every number the presenter reads aloud reproduced. The histogram is the one that moved, and it is
+not noise: seeded applications are scored against the corpus's own `asOf` date (2026-06-30), while
+`POST .../scrutiny/run` scores them against **today**, and the two dates put different documents
+past their expiry. Pass 1's store had been through the latency bench, which re-ran scrutiny on all
+20 applications. Verified on the pass-2 store: one bench pass took the histogram from
+`{low 17, medium 1, high 3}` to `{low 14, medium 4, high 3}` - pass 1's exact numbers - with three
+applications crossing from low to medium. `avgScrutinySeconds` moved for the related reason that it
+averages only the runs recorded since seeding (0.00033 then, 0.0013 after), so the client-side bench
+p50 is the figure to quote, not that one.
+
+**Demo consequence:** whoever presents must not re-run scrutiny on the seeded applications before
+the queue shot, or the histogram and the "27 of 50" story drift toward today's date. Either
+re-seed immediately before recording, or record against a store that has only ever been seeded.
+
 ## Latency, measured over the wire
 
 `python -m pipeline.scripts.bench_scrutiny --base-url http://127.0.0.1:8123 --sample 20 --repeat 5`
