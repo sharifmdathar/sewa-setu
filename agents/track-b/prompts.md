@@ -61,7 +61,7 @@ Task: deterministic mock seed mirroring dataset-v1 shapes (3 clean, 2 anomalous,
 (click-through list). DoD: checklist passes cold in < 5 min on mock.
 Commit: `track-b: demo seed + states + checklist`
 
-## B9 — Track docs
+## B9 — Track docs [DONE — ux-notes + wireframes (as-built) + README runbook; lint + tsc green]
 Write scope: docs/track-b/**
 Task: ux-notes.md (journey rationale vs SPEC), wireframes.md (mermaid/ascii per screen),
 apps/web/README.md runbook (mock + real modes). DoD: runbook followed cold without questions.
