@@ -1,0 +1,68 @@
+# Rules engine configuration (SPEC.md section 5).
+# Weights feed the fraud scorer's riskScore (prompt A6); severities drive the check output.
+
+version: 1
+
+# A riskScore at or above this counts as "flagged" for the eval gate (SPEC.md section 7).
+flagThreshold: 60
+# Clean applications must stay below this ceiling (prompt A6 DoD).
+cleanCeiling: 30
+
+checks:
+  C1:
+    label: Identity match across documents
+    weight: 25
+    failSeverity: high
+    warnSeverity: medium
+  C2:
+    label: Document validity (expiry and issuer)
+    weight: 20
+    failSeverity: high
+    warnSeverity: medium
+  C3:
+    label: Completeness of required documents
+    weight: 20
+    failSeverity: medium
+    warnSeverity: low
+  C4:
+    label: Cross-field consistency with the declaration
+    weight: 20
+    failSeverity: medium
+    warnSeverity: low
+  C5:
+    label: Fraud signals
+    weight: 15
+    failSeverity: high
+    warnSeverity: medium
+
+# Feature weights for riskScore. Severity multipliers scale a failed check's weight.
+fraudWeights:
+  duplicateDocumentHash: 45
+  tamperedAmount: 40
+  identityDivergence: 25
+  expiredDocument: 20
+  missingDocument: 15
+
+severityMultipliers:
+  high: 1.0
+  medium: 0.6
+  low: 0.3
+
+# recommendation mapping (SPEC.md section 5): reject only on high-severity fails.
+recommendationThresholds:
+  rejectMinScore: 85
+  manualReviewMinScore: 60
+  requestInfoMinScore: 30
+
+# Plausible issuing authority per document type; a substring test, not a registry lookup.
+authorityExpectations:
+  aadhaar: Unique Fictiona Identity Authority
+  bank_statement: Fictiona Gramin Bank
+  revenue_record: Tehsildar Office
+  school_certificate: District Education Office
+  parent_caste_certificate: Taluka Social Welfare Office
+  self_income_declaration: Applicant self-declaration
+  electricity_bill: Fictiona Power Distribution
+  affidavit: Notary Public
+  fee_receipt: Fictiona Seva Kendra
+  voter_id: Chief Electoral Officer
