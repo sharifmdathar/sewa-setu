@@ -47,11 +47,23 @@ The incomplete filing is what the script's own citizen beat produces — 2 of 3 
 
 ```
 C1 pass  Every document names the same person as the application, so identity is consistent.
-C2 warn  An officer should look at this before deciding. The dates are possible but the issuing a…
+C2 warn  An officer should look at this before deciding. The dates that were read are possible, b…
 C3 fail  The evidence set is incomplete, so the claim cannot be verified without another document…
 C4 pass  The figures the applicant declared are the same figures the documents state.
 C5 pass  No reused document files or suspiciously padded amounts were found in this application.
 ```
+
+**Re-quote before recording.** C2's sentence changed after this rehearsal was written: `fcf2582` made
+an unread expiry a warning, and the follow-up made the wording name the *actual* cause, so the C2
+line the presenter reads aloud is now:
+
+> An officer should look at this before deciding. The dates that were read are possible, but the
+> issuing authority is missing or does not match the office that should have signed it - check the
+> paper before approving.
+
+Verified against current code on a 2-of-3-document `income_certificate` filing: C1 pass, C2 warn,
+C3 fail, C4 info (that application declares no monetary field, so there is nothing to cross-check),
+C5 pass, `riskScore` 39, `request_info`. Reproduce it with `docs/track-a/demo-morning-checklist.md`.
 
 ### The fraud signal pointed at (2:30)
 
