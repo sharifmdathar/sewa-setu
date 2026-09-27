@@ -249,3 +249,32 @@ Deterministic (same corpus ids, same scores every run) and idempotent: it replac
 generator-shaped ids (`APP-0001`..), so applications submitted through the API (`APP-<10 hex>`)
 survive a re-seed. `--limit N` changes the slice size; `--root DIR` seeds somewhere else. Run it
 from the repo root - it imports `pipeline`, which is installed, and reads the corpus files.
+
+## 13. Live latency benchmark (integration step I4)
+
+The eval harness answers "how good is the scrutiny"; this answers "how long does the officer
+wait":
+
+```bash
+python -m pipeline.scripts.seed_demo --root /tmp/bench-store          # repo root
+cd services/pipeline
+PIPELINE_VAR_DIR=/tmp/bench-store uvicorn pipeline.api.main:app \
+  --host 127.0.0.1 --port 8123 --no-access-log &
+python -m pipeline.scripts.bench_scrutiny --base-url http://127.0.0.1:8123 \
+  --sample 20 --repeat 5
+```
+
+It takes the applications `/officer/queue` lists that actually have documents (an empty
+application answers 409), fires `POST .../scrutiny/run` at each, and reports min/p50/p95/max
+against SPEC §2's 60 s target. Measured on 2026-09-27 over 100 runs: **p50 0.0030 s, p95 0.0032 s,
+max 0.0037 s**, first call after a cold process 0.0056 s, while the server's own
+`avgScrutinySeconds` said 0.0011-0.0013 s - the difference is HTTP, JSON and the store write.
+
+Exit codes: 0 target met, 1 a run breached it, 2 nothing answering that port (or nothing filed to
+score). `--json PATH` writes the summary plus every sample, including the `modelMeta` of the last
+report, which is where the honest caveat lives: `extractor: template`, because this script runs
+whatever the server is configured with and this server had no `LLM_API_KEY`. The model leg - up to
+two calls per document behind a 30 s timeout - has only been timed against a local stand-in
+endpoint (666 ms/application mean over `--limit 2`, see `docs/track-a/live-model-leg.md`); no real
+vision model has been measured. Re-running appends scrutiny events to each application's timeline,
+like the officer's "run again" does, so point it at a scratch store rather than a live demo one.

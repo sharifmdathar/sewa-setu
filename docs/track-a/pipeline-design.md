@@ -107,14 +107,24 @@ the corpus documents are attacker-supplied text by construction.
 
 ## Eval summary
 
-Pasted from `eval/reports/2026-09-27T10-35-06/report.md` (regenerate with
+Pasted from `eval/reports/2026-09-27T15-55-07/report.md` (regenerate with
 `python -m eval.runner`; numbers quoted in the submission must come from that file).
 
 | Metric | Baseline (manual) | This run | Target |
 | --- | --- | --- | --- |
 | Fail-flag precision | unmeasured | 1.00 | >= 0.90 |
 | Fail-flag recall | unmeasured | 1.00 | >= 0.85 |
-| Mean scrutiny time / application | 12–18 min | 0.1 ms | < 60 s |
+| Mean scrutiny time / application, offline | 12–18 min | 0.11 ms | < 60 s |
+| Same, live over HTTP (100 runs, 20 applications) | 12–18 min | 3.0 ms p50, 3.7 ms max | < 60 s |
+
+The last two rows measure different things, and the submission should quote the live one:
+`python -m pipeline.scripts.bench_scrutiny` times `POST /applications/{id}/scrutiny/run` against a
+running uvicorn with the store writes included, while the harness's 0.11 ms is in-process template
+scoring. Both rows are the rules-only leg - template extractor, deterministic adjudicator. The
+model leg has been timed only against a local stand-in endpoint: 666 ms per application mean over
+`--limit 2`, a 429-and-retry included (`docs/track-a/live-model-leg.md`). No real vision model has
+been measured, so no figure here describes production model latency. See
+`docs/track-a/i4-demo-rehearsal.md` for the whole demo walk.
 
 | Check | Support | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
