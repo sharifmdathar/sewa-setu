@@ -101,7 +101,7 @@ export default async function OfficerQueuePage({
             <option value="high">High (≥60)</option>
             <option value="low">Low (&lt;60)</option>
           </select>
-          <button className="min-h-10 rounded-md bg-zinc-900 px-4 font-medium text-white">
+          <button className="min-h-10 rounded-md bg-brand-600 px-4 font-medium text-white hover:bg-brand-700">
             Filter
           </button>
         </form>
@@ -144,7 +144,7 @@ export default async function OfficerQueuePage({
                   <td className="px-3 py-2 text-right">
                     <Link
                       href={`/officer/apps/${q.applicationId}`}
-                      className="inline-block rounded-md border border-zinc-300 px-3 py-1.5 font-medium hover:border-zinc-900"
+                      className="inline-block rounded-md border border-zinc-300 px-3 py-1.5 font-medium transition hover:border-brand-500 hover:text-brand-700"
                     >
                       Open report
                     </Link>

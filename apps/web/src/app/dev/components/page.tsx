@@ -84,7 +84,7 @@ export default function DevComponentsPage() {
           title="No applications yet"
           description="Pick a service to start your first application."
           action={
-            <span className="inline-flex min-h-12 items-center rounded-md bg-zinc-900 px-5 py-3 text-sm font-medium text-white">
+            <span className="inline-flex min-h-12 items-center rounded-md bg-brand-600 px-5 py-3 text-sm font-medium text-white">
               Browse services
             </span>
           }

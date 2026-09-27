@@ -27,7 +27,7 @@ export default async function MyApplicationsPage() {
           action={
             <Link
               href="/citizen"
-              className="inline-flex min-h-12 items-center rounded-md bg-zinc-900 px-5 py-3 text-sm font-medium text-white"
+              className="inline-flex min-h-12 items-center rounded-md bg-brand-600 px-5 py-3 text-sm font-medium text-white"
             >
               Browse services
             </Link>
@@ -39,7 +39,7 @@ export default async function MyApplicationsPage() {
             <li key={q.applicationId}>
               <Link
                 href={`/citizen/apps/${q.applicationId}`}
-                className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-900"
+                className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-brand-500 hover:shadow-card"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">

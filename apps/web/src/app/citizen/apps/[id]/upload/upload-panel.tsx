@@ -102,7 +102,7 @@ export function UploadPanel({
             type="button"
             onClick={uploadCurrent}
             disabled={!fileName || busy}
-            className="min-h-12 w-full rounded-md bg-zinc-900 px-5 py-3 text-base font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
+            className="min-h-12 w-full rounded-md bg-brand-600 px-5 py-3 text-base font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {busy ? "Uploading…" : `Upload ${current}`}
           </button>
@@ -120,7 +120,7 @@ export function UploadPanel({
             type="button"
             disabled={pending || busy}
             onClick={() => startTransition(() => void runScrutinyAction({ applicationId }))}
-            className="min-h-12 w-full rounded-md bg-zinc-900 px-5 py-3 text-base font-semibold text-white hover:bg-zinc-700 disabled:opacity-60"
+            className="min-h-12 w-full rounded-md bg-brand-600 px-5 py-3 text-base font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {pending ? "Checking…" : "Check my application"}
           </button>

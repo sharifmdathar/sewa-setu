@@ -60,7 +60,7 @@ export function JourneyNav() {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className={`min-h-12 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`inline-flex min-h-12 items-center border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                 active
                   ? "border-brand-600 text-brand-700"
                   : "border-transparent text-zinc-500 hover:text-brand-700"
