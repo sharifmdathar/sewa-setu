@@ -22,7 +22,6 @@ from pipeline.store.jsonstore import JsonStore
 
 APPLICATIONS = "applications"
 REPORTS = "reports"
-QUEUE_STATUS = "scrutiny_done"
 # `info_requested` is still open work - the ball is with the citizen, and the contract keeps
 # it distinct from `decided` for that reason - so it counts as pending, not decided.
 OPEN_STATUSES = (
@@ -234,11 +233,15 @@ class Repository:
     # --- queue and metrics ---------------------------------------------------------------
 
     def queue(self) -> list[dict[str, Any]]:
-        """Applications awaiting an officer, highest risk first (SPEC.md J3)."""
+        """Every application with its status and risk score, highest risk first (CR-2).
+
+        Decided and not-yet-scrutinized applications are included rather than hidden: the
+        officer page filters by status, and a queue that drops closed work can never agree
+        with `metrics.pending`. `OPEN_STATUSES` is the single definition of "still open" for
+        both. An application with no report yet scores 0, because QueueItem requires the field.
+        """
         items = []
         for record in self.all():
-            if record["status"] != QUEUE_STATUS:
-                continue
             report = self.get_report(str(record["id"]))
             items.append(
                 {
@@ -250,6 +253,11 @@ class Repository:
                 }
             )
         return sorted(items, key=lambda item: (-int(item["riskScore"]), str(item["applicationId"])))
+
+    @staticmethod
+    def open_count(records: list[dict[str, Any]]) -> int:
+        """Applications still awaiting someone - the queue's and the dashboard's one definition."""
+        return sum(1 for record in records if record["status"] in OPEN_STATUSES)
 
     def metrics(self, flag_threshold: int, generated_at: dt.datetime) -> dict[str, Any]:
         records = self.all()
@@ -268,8 +276,8 @@ class Repository:
         ]
         summary: dict[str, Any] = {
             "applicationsTotal": len(records),
-            "pending": sum(1 for record in records if record["status"] in OPEN_STATUSES),
-            "decided": sum(1 for record in records if record["status"] not in OPEN_STATUSES),
+            "pending": self.open_count(records),
+            "decided": len(records) - self.open_count(records),
             "avgScrutinySeconds": round(sum(latencies) / len(latencies) / 1000, 5)
             if latencies
             else 0.0,

@@ -148,19 +148,14 @@ improving recall means richer scoring (A6 follow-up), not moving the goal posts.
   worker, or move to a real database (out of POC scope).
 - **Auth**: none, by design (SPEC §3 — production auth is out, the demo uses a role switcher).
   Every path is unauthenticated; do not expose this port.
-- **M4 is partly prepared, and unapplied.** `m4-pre-contract` (tag) marks the pre-apply state;
-  rollback is `git reset --hard m4-pre-contract`. CR-2's *code* half (queue returns all statuses)
-  is deliberately NOT landed on its own: it is schema-valid today, but the contract line
-  `description: pending apps w/ risk` would then describe behaviour that no longer happens, which
-  is the exact drift CR-2 exists to remove. Land code and description together, in the order
-  CR-2 -> CR-3 -> CR-1 from `docs/track-b/m4-contract-apply.md`.
-- **M4 is still unapplied.** `shared/contracts/openapi.yaml` is byte-identical to the scaffold
+- **M4 is under way (paired session, 2026-09-27).** `m4-pre-contract` marks the pre-apply state
+  (`git reset --hard m4-pre-contract` rolls the whole thing back). CR-2 is applied: contract
+  description + `queue()` returning every status + `open_count()` as the single definition of
+  "open", so the dashboard's `pending` and the queue cannot disagree. CR-3 and CR-1 follow. `shared/contracts/openapi.yaml` is byte-identical to the scaffold
   freeze (verified `git log -1 -- shared/contracts/openapi.yaml`). The CR-1/2/3 hunks are recorded
   and pre-validated, but editing the contract needs the paired session - and while only one track
   is present, a policy guard blocks the edit outright, so this is not something a lone agent can
   land by trying harder.
-- **Queue/metrics "open" split is one definition today** (`OPEN_STATUSES`) but the queue still
-  returns only `scrutiny_done` items; CR-2 changes that plus the one contract description line.
 - **CR-1** open: no contract path lists an application's documents.
 - **I2 seed**: `tests/corpus.py` and `eval/dataset.py` both read dataset-v1 into pipeline shapes;
   the seeding step can reuse either, but application ids from the corpus are what the store will

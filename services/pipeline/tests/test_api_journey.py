@@ -163,8 +163,19 @@ def test_the_queue_ranks_by_risk_and_empties_as_officers_decide(client: TestClie
     assert [item["applicationId"] for item in queue] == [fraud, clean]
     assert [item["riskScore"] for item in queue] == [fraud_score, 0]
 
+    # CR-2: a decided application stays listed, with its status - filtering is the UI's job.
     decide(client, fraud, "reject", "Forged bank statement.")
-    assert [item["applicationId"] for item in client.get("/officer/queue").json()] == [clean]
+    after = client.get("/officer/queue").json()
+    assert {item["applicationId"]: item["status"] for item in after} == {
+        fraud: "decided",
+        clean: "scrutiny_done",
+    }
+    assert [item["riskScore"] for item in after] == [fraud_score, 0]
+
+    # The divergence CR-2 closes: the dashboard's "pending" is the queue's open count.
+    metrics = client.get("/metrics/summary").json()
+    assert metrics["pending"] == sum(1 for item in after if item["status"] != "decided") == 1
+    assert metrics["decided"] == 1
 
 
 def test_two_different_applicants_are_not_duplicates_of_each_other(client: TestClient) -> None:

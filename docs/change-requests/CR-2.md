@@ -64,3 +64,16 @@ client-side, so it becomes correct the moment the queue returns all statuses.
 
 **Validation (pre-applied to a copy):** `status: decided` accepted, `status: closed` rejected
 (enum unchanged). Backward compatible — existing consumers unaffected.
+
+---
+
+## Applied - M4 paired session (2026-09-27)
+
+Contract line changed to `all apps w/ status + risk`. Track A landing: `Repository.queue()`
+returns every application with its current status (highest risk first, no report yet = 0),
+`QUEUE_STATUS` removed, and `Repository.open_count(``OPEN_STATUSES``) is now the single
+definition behind both `metrics.pending` and the queue's open set.
+
+Verified live: a `submitted`-only application that the old queue hid is now listed (22 items,
+statuses `scrutiny_done` + `submitted`), and `metrics.pending` equals the queue's open count
+(22 == 22). Track B: no change required, per the proposal.
