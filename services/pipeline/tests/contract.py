@@ -15,12 +15,19 @@ from __future__ import annotations
 
 import datetime as dt
 import functools
+import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-CONTRACT_PATH = Path(__file__).resolve().parents[3] / "shared" / "contracts" / "openapi.yaml"
+# `SEWA_CONTRACT` points the validator at a different YAML. It exists so a proposed
+# change-request can be validated against the real test suite before anyone edits the
+# frozen contract; unset, it reads shared/contracts/openapi.yaml and nothing changes.
+CONTRACT_PATH = Path(
+    os.environ.get("SEWA_CONTRACT")
+    or Path(__file__).resolve().parents[3] / "shared" / "contracts" / "openapi.yaml"
+)
 
 
 @functools.lru_cache(maxsize=1)
@@ -35,6 +42,46 @@ def schema(name: str) -> dict[str, Any]:
     if name not in components:
         raise KeyError(f"{name} is not a components/schemas entry of {CONTRACT_PATH}")
     return components[name]
+
+
+def response_schema(method: str, path: str, status: str) -> dict[str, Any]:
+    """The schema a path declares inline for one status, e.g. `("get", "/services", "200")`.
+
+    Several contract responses have no named component - `/services` and `/officer/queue` are
+    bare arrays, and `/officer/decisions` returns an inline object - so path-level lookup is
+    what lets those be checked field-for-field too.
+    """
+    # The media-type key is literally "application/json"; a JSON pointer escapes its slash as ~1
+    # (so "~1json", not "~1/json", which would still be a separator).
+    pointer = (
+        f"#/paths/{path.replace('/', '~1')}/{method.lower()}"
+        f"/responses/{status}/content/application~1json/schema"
+    )
+    return _resolve(pointer)
+
+
+def assert_valid_response(instance: Any, method: str, path: str, status: str) -> Any:
+    """Validate a live response against what its own contract path declares; return it."""
+    try:
+        node = response_schema(method, path, status)
+    except (KeyError, TypeError):
+        name = f"{method.upper()} {path} {status}"
+        raise AssertionError(
+            f"{CONTRACT_PATH.name} declares no JSON response for {name}"
+        ) from None  # the lookup error is noise; the absence is the finding
+    problems = _validate(instance, node, "$")
+    if problems:
+        raise AssertionError(
+            f"{method.upper()} {path} ({status}) does not conform to the contract:\n  "
+            + "\n  ".join(problems)
+        )
+    return instance
+
+
+def contract_paths() -> dict[str, Any]:
+    """Every path the contract declares, so a test can prove none of them went unjudged."""
+    paths: dict[str, Any] = _document()["paths"]
+    return paths
 
 
 def validate(instance: Any, name: str) -> list[str]:
@@ -53,7 +100,7 @@ def assert_valid(instance: Any, name: str) -> None:
 def _resolve(ref: str) -> dict[str, Any]:
     node: Any = _document()
     for part in ref.removeprefix("#/").split("/"):
-        node = node[part]
+        node = node[part.replace("~1", "/").replace("~0", "~")]
     result: dict[str, Any] = node
     return result
 
@@ -111,11 +158,20 @@ def _validate_array(value: list[Any], node: dict[str, Any], path: str) -> list[s
 
 
 def _validate_string(value: str, node: dict[str, Any], path: str) -> list[str]:
-    if node.get("format") != "date-time":
-        return []
-    if _is_date_time(value):
-        return []
-    return [f"{path}: '{value}' is not an RFC 3339 date-time with an offset"]
+    fmt = node.get("format")
+    if fmt == "date-time" and not _is_date_time(value):
+        return [f"{path}: '{value}' is not an RFC 3339 date-time with an offset"]
+    if fmt == "date" and not _is_date(value):
+        return [f"{path}: '{value}' is not an ISO calendar date"]
+    return []
+
+
+def _is_date(raw: str) -> bool:
+    try:
+        dt.date.fromisoformat(raw)
+    except ValueError:
+        return False
+    return True
 
 
 def _validate_range(value: int | float, node: dict[str, Any], path: str) -> list[str]:
