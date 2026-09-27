@@ -11,7 +11,9 @@ export const dynamic = "force-dynamic";
 
 export default async function MyApplicationsPage() {
   const api = getApiClient();
-  const [queue, services] = [await api.getQueue(), await api.listServices()];
+  const [allQueue, services] = [await api.getQueue(), await api.listServices()];
+  // getQueue now includes decided apps; this POC list stays open-work only.
+  const queue = allQueue.filter((q) => q.status !== "decided");
   const nameOf = (id: string) =>
     services.find((s) => s.id === id)?.name ?? id;
 

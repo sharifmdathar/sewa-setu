@@ -22,6 +22,8 @@ function Card({ label, value, hint }: { label: string; value: string; hint?: str
 export default async function DashboardPage() {
   const api = getApiClient();
   const [metrics, queue] = await Promise.all([api.getMetrics(), api.getQueue()]);
+  // getQueue now also returns decided apps; charts keep the pending-only view.
+  const pendingQueue = queue.filter((q) => q.status !== "decided");
 
   return (
     <div className="space-y-6">
@@ -54,8 +56,8 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ApplicationsByDayChart data={appsByDay(queue)} />
-        <RiskDistributionChart data={riskDistribution(queue)} />
+        <ApplicationsByDayChart data={appsByDay(pendingQueue)} />
+        <RiskDistributionChart data={riskDistribution(pendingQueue)} />
       </div>
 
       {(metrics.evalPrecision != null || metrics.evalRecall != null) && (

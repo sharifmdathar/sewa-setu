@@ -6,17 +6,24 @@ import { getApiClient } from "@/lib/api/client";
 import { EmptyState } from "@/components/EmptyState";
 import { RiskMeter } from "@/components/RiskMeter";
 import { StatusBadge } from "@/components/StatusBadge";
+import { StatusFilter } from "./status-filter";
 import type { AppStatus } from "@/lib/api/types";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES: AppStatus[] = [
+// All contract statuses (AppStatus enum). "decided" is offered as a filter but
+// left unchecked by default, so the queue opens on open work only.
+const STATUS_OPTIONS: AppStatus[] = [
   "submitted",
   "documents_uploaded",
   "scrutiny_pending",
   "scrutiny_done",
   "info_requested",
+  "decided",
 ];
+const DEFAULT_STATUSES: AppStatus[] = STATUS_OPTIONS.filter(
+  (s) => s !== "decided",
+);
 
 function nameOf(fields: Record<string, unknown>): string {
   const n = fields["applicantName"];
@@ -26,7 +33,7 @@ function nameOf(fields: Record<string, unknown>): string {
 export default async function OfficerQueuePage({
   searchParams,
 }: {
-  searchParams: { status?: string; risk?: string };
+  searchParams: { status?: string | string[]; risk?: string; f?: string };
 }) {
   const api = getApiClient();
   const queue = await api.getQueue();
@@ -45,14 +52,22 @@ export default async function OfficerQueuePage({
     }
   }
 
-  const status = STATUSES.includes(searchParams.status as AppStatus)
-    ? (searchParams.status as AppStatus)
-    : undefined;
-  const risk = searchParams.risk === "high" || searchParams.risk === "low"
-    ? searchParams.risk
-    : undefined;
+  // Multi-select status filter. `f=1` marks an explicit form submission so we
+  // can tell "user unchecked everything" (show none) apart from a first load
+  // (default = every status except decided).
+  const explicit = searchParams.f === "1";
+  const raw = searchParams.status;
+  const chosen = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(
+    (s): s is AppStatus => (STATUS_OPTIONS as string[]).includes(s),
+  );
+  const selectedStatuses = explicit ? chosen : DEFAULT_STATUSES;
+  const selected = new Set<AppStatus>(selectedStatuses);
+  const risk =
+    searchParams.risk === "high" || searchParams.risk === "low"
+      ? searchParams.risk
+      : undefined;
   const filtered = rows.filter(({ q }) => {
-    if (status && q.status !== status) return false;
+    if (!selected.has(q.status)) return false;
     if (risk === "high" && q.riskScore < 60) return false;
     if (risk === "low" && q.riskScore >= 60) return false;
     return true;
@@ -67,23 +82,12 @@ export default async function OfficerQueuePage({
             Sorted by risk (highest first) · {filtered.length} of {rows.length} shown
           </p>
         </div>
-        <form method="get" className="flex items-center gap-2 text-sm">
-          <label htmlFor="f-status" className="sr-only">
-            Filter by status
-          </label>
-          <select
-            id="f-status"
-            name="status"
-            defaultValue={status ?? ""}
-            className="min-h-10 rounded-md border border-zinc-300 bg-white px-2"
-          >
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+        <form
+          method="get"
+          className="flex items-center gap-2 text-sm"
+        >
+          <input type="hidden" name="f" value="1" />
+          <StatusFilter options={STATUS_OPTIONS} selected={selectedStatuses} />
           <label htmlFor="f-risk" className="sr-only">
             Filter by risk
           </label>
