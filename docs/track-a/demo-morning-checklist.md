@@ -128,3 +128,9 @@ python -m eval.runner && python -m eval.gate          # expect PASS: 1.000 / 1.0
 - Application-level risk-flag recall is **0.54** at the spec-pinned threshold of 60. The queue ranks;
   it does not catch.
 - The image leg is clean text rendered to a PNG, not a phone photo. Recall 0.86 is a ceiling.
+- If asked "what does the model get wrong?", the honest and better answer is the measured one: it
+  reads every identity field perfectly and returns `null` for the expiry on 14 of 18 documents —
+  and asked in prose rather than JSON it states that expiry correctly. It has the value and will
+  not commit it to the field. That is why the pipeline treats a missing value as a gap an officer
+  must see (C2 warns) rather than as a passed check. Full write-up in
+  `docs/track-a/live-model-leg.md`.

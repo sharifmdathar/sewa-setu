@@ -141,10 +141,46 @@ Now committed as tests, so this file is a description rather than a claim
 
 The failure is **not uniform, and that is the useful part**: `docType`, `name`, `idNumber` and
 `issueDate` were all read at 1.00, while `expiryDate` was read on 4 of the 18 documents that state
-one. The model reads the head of a page and drops the tail. Precision 0.98 against recall 0.86 says
-it omits rather than invents — which is the dangerous direction here, because C2 can only fail a
-document whose expiry it was given. That is why C2 now warns when a document of an expiring type
-states no expiry (`rules.yaml -> expiryExpectedDocTypes`), instead of reading silence as validity.
+one. Precision 0.98 against recall 0.86 says it omits rather than invents on this prompt shape —
+which is the safer direction, but still dangerous here, because C2 can only fail a document whose
+expiry it was given. That is why C2 now warns when a document of an expiring type states no expiry
+(`rules.yaml -> expiryExpectedDocTypes`), instead of reading silence as validity.
+
+## Why the expiry goes missing, and why no fix shipped for it
+
+An earlier draft of this file said the model "reads the head of a page and drops the tail". That
+was wrong, and the investigation that disproved it is worth recording, because it ended in a
+revert.
+
+`EXPIRY_DATE` sits on **line 16 of 17-18 in every document**, so position is constant and cannot
+separate the four that worked from the fourteen that did not. From there:
+
+| Experiment | Result |
+| --- | --- |
+| Crop to the bottom half, re-read | expiry read **correctly** - and the model invented a name (`Rajesh Kumar`) for a crop that contains no name at all |
+| Crop to the bottom 28% | still null |
+| Upscale the whole page 2x | still null |
+| Re-render at font 26 / 30 / 40 | still null - **not a resolution problem** |
+| Add "read the whole document, including the last lines" to the system prompt | **0 of 4** recovered |
+| Ask the same question in prose, no JSON contract | answers `EXPIRY_DATE: 2039-01-20` **correctly** |
+| Ask in JSON with a short concrete schema | returns JSON, but copies the wrong line (`"quoted": "NO REAL PII"`) |
+
+The model **has the value and will not commit it to the JSON field**. So the obvious mitigation -
+a narrow second pass that re-asks only for the null field - cannot work when the second pass goes
+through the same JSON contract that suppressed it. That mitigation was built anyway (~90 lines plus
+5 tests, an opt-in `confirm_null` on the extractor, gated on the model actually quoting the printed
+line), measured on the live leg, and **reverted**: the full 20-document run came back at 107/124
+and 5 of 20, byte-identical to before, while costing up to one extra call per document. A feature
+that spends quota to change nothing is worse than no feature.
+
+What did ship is the mitigation that costs zero calls: C2 treats an unread expiry on an
+expiry-carrying type as a `warn` naming the file, so the null becomes an officer-visible gap
+instead of a silent pass.
+
+One finding here deserves the deck. Given a crop with no name on it, the model produced one. Under
+`response_format: json_object` it hedges to null; asked loosely, it answers in prose and confabulates
+when the evidence is out of view. That is the argument for the two invariants this whole system is
+built on - every value carries the line it came from, and the officer decides.
 
 Two consequences for the submission. SPEC §2's "< 60 s" measured **13.3 s mean, 15.5 s worst per
 application** (2 applications, 9 documents, cache off) - inside the target, but on a sample of two,

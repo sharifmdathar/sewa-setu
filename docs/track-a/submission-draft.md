@@ -106,10 +106,18 @@ agree, so anything the model row says afterwards differs for reasons about the m
 
 **Where the model actually fails is not uniform.** `docType`, `name`, `idNumber` and `issueDate`
 are each read at 1.00 — every identity field that C1 and C4 depend on. What collapses is
-`expiryDate`: stated on 18 documents, answered on 4, recall 0.22. The model reads the head of a
-page and drops the tail. Precision 0.98 confirms the direction: it almost never invents a value,
-it omits one — which is the quieter and therefore more dangerous failure, because an omitted
+`expiryDate`: stated on 18 documents, answered on 4, recall 0.22. Precision 0.98 says it omits
+rather than invents, which is the quieter and therefore more dangerous failure, because an omitted
 expiry date reads as a document that cannot be expired.
+
+It is not a resolution or layout problem, and that was established rather than assumed: the field
+sits on the same line in every document, re-rendering at larger fonts changed nothing, and a
+targeted second pass — built, measured, and reverted for recovering zero values at a cost of one
+extra call per document — changed nothing either. Asked in prose rather than JSON the model states
+the expiry correctly, so it has the value and will not commit it to the field. The mitigation that
+did ship costs no calls: C2 now warns when an expiry-carrying document yields no expiry, so the
+null is an officer-visible gap rather than a silent pass. Full investigation in
+`docs/track-a/live-model-leg.md`.
 
 ## 5. Acceptance criteria (SPEC §8) status
 
