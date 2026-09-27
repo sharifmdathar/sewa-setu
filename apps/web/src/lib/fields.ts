@@ -1,0 +1,80 @@
+// Safe narrowing of contract Service.fieldSchema (open `type: object` in the
+// frozen contract). We only render fields we understand; unknown shapes are
+// skipped, never crash. Keys are the applicantFields keys (B3 dynamic forms).
+
+export type FieldDef = {
+  label: string;
+  required: boolean;
+} & (
+  | { type: "text" }
+  | { type: "date" }
+  | { type: "number" }
+);
+
+const ALIASES: Record<string, FieldDef["type"]> = {
+  string: "text",
+  text: "text",
+  date: "date",
+  number: "number",
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** fieldSchema (contract: object) -> ordered list of renderable fields. */
+export function parseFieldSchema(schema: unknown): { name: string; def: FieldDef }[] {
+  if (!isRecord(schema)) return [];
+  const out: { name: string; def: FieldDef }[] = [];
+  for (const [name, raw] of Object.entries(schema)) {
+    if (!isRecord(raw)) continue;
+    const t = ALIASES[String(raw.type ?? "").toLowerCase()];
+    if (!t) continue; // unknown field type -> skip (forward-compatible)
+    out.push({
+      name,
+      def: {
+        type: t,
+        label: typeof raw.label === "string" && raw.label ? raw.label : name,
+        required: raw.required === true,
+      },
+    });
+  }
+  return out;
+}
+
+const CONTROL_CLASS =
+  "min-h-12 w-full rounded-md border border-zinc-300 bg-white px-3 py-3 text-base focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900";
+
+/** HTML input attrs for a FieldDef (plain form POST -> server action). */
+export function inputProps(name: string, def: FieldDef) {
+  return {
+    name,
+    id: `field-${name}`,
+    required: def.required,
+    type: def.type === "number" ? ("number" as const) : ("text" as const),
+    ...(def.type === "date" ? { type: "date" as const } : {}),
+    className: CONTROL_CLASS,
+    "aria-required": def.required,
+  };
+}
+
+/** Collect applicantFields from a plain form POST (skips bookkeeping keys). */
+export function fieldsFromFormData(
+  fd: FormData,
+  fields: { name: string; def: FieldDef }[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const { name, def } of fields) {
+    const v = fd.get(name);
+    if (typeof v !== "string" || v === "") continue;
+    out[name] = def.type === "number" ? Number(v) : v;
+  }
+  return out;
+}
+
+/** Readable value for rendering declared fields (timeline, reports). */
+export function formatFieldValue(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "number") return v.toLocaleString("en-IN");
+  return String(v);
+}
