@@ -8,7 +8,6 @@ two applicants who really are different people must not be flagged as document d
 from __future__ import annotations
 
 import base64
-import json
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,6 @@ from helpers import doc_text
 
 from pipeline.api import repository as repository_module
 from pipeline.api.main import create_app
-from pipeline.api.repository import latest_eval_metrics
 
 INCOME = 180000
 APPLICANTS = (
@@ -264,46 +262,3 @@ def test_an_older_record_falls_back_to_the_latency_it_did_record() -> None:
     assert repository_module.scrutiny_ms({"scrutinyMs": 0.42}, report) == 0.42
     assert repository_module.scrutiny_ms({"scrutinyMs": True}, report) == 37.0  # not a number
     assert repository_module.scrutiny_ms({}, {"modelMeta": {}}) == 0.0
-
-
-def test_metrics_omit_the_eval_fields_until_the_harness_has_run(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(repository_module, "EVAL_REPORTS_DIR", tmp_path / "no-eval-yet")
-
-    payload = client.get("/metrics/summary").json()
-
-    assert_valid(payload, "MetricsSummary")
-    assert "evalPrecision" not in payload and "evalRecall" not in payload
-
-
-def test_metrics_read_eval_numbers_from_the_newest_report(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    root = tmp_path / "reports"
-    for stamp, content in {
-        "2026-09-01T00-00-00": {"evalPrecision": 0.5, "evalRecall": 0.5},
-        "2026-09-26T09-30-00": {"evalPrecision": 0.94, "evalRecall": 0.88},
-    }.items():
-        directory = root / stamp
-        directory.mkdir(parents=True)
-        (directory / "report.json").write_text(json.dumps(content), encoding="utf-8")
-    monkeypatch.setattr(repository_module, "EVAL_REPORTS_DIR", root)
-
-    assert latest_eval_metrics() == {"evalPrecision": 0.94, "evalRecall": 0.88}
-    payload = client.get("/metrics/summary").json()
-
-    assert_valid(payload, "MetricsSummary")
-    assert (payload["evalPrecision"], payload["evalRecall"]) == (0.94, 0.88)
-
-
-def test_a_malformed_eval_report_never_breaks_the_metrics_endpoint(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    broken = tmp_path / "reports" / "2026-09-26T00-00-00"
-    broken.mkdir(parents=True)
-    (broken / "report.json").write_text("{not json", encoding="utf-8")
-    monkeypatch.setattr(repository_module, "EVAL_REPORTS_DIR", tmp_path / "reports")
-
-    assert latest_eval_metrics() == {}
-    assert_valid(client.get("/metrics/summary").json(), "MetricsSummary")

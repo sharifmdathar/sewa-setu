@@ -14,8 +14,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from contract import assert_valid
+from fastapi.testclient import TestClient
 
-from pipeline.api.repository import latest_eval_metrics, newest_eval_report
+from pipeline.api import evalfeed
+from pipeline.api.evalfeed import latest_eval_metrics, newest_eval_report
+from pipeline.api.main import create_app
 
 NEWER = {"evalPrecision": 0.94, "evalRecall": 0.88, "generatedAt": "2026-09-26T09:30:00+00:00"}
 OLDER = {"evalPrecision": 0.5, "evalRecall": 0.5, "generatedAt": "2026-09-01T00:00:00+00:00"}
@@ -118,19 +122,58 @@ def test_the_endpoint_quotes_the_newest_report_and_nothing_else(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """End-to-end through the API, with the numbers picked to differ from the real ones."""
-    from fastapi.testclient import TestClient
-
-    from pipeline.api import repository as repository_module
-    from pipeline.api.main import create_app
-
     root = tmp_path / "reports"
     write_report(root, "2026-09-01T00-00-00", OLDER)
     newer = {**NEWER, "generatedAt": dt.datetime.now(dt.UTC).isoformat()}
     write_report(root, "2026-09-26T09-30-00", newer)
-    monkeypatch.setattr(repository_module, "EVAL_REPORTS_DIR", root)
+    monkeypatch.setattr(evalfeed, "EVAL_REPORTS_DIR", root)
 
     client = TestClient(create_app(tmp_path / "var"))
     payload = client.get("/metrics/summary").json()
 
     assert payload["evalPrecision"] == 0.94
     assert payload["evalRecall"] == 0.88
+
+
+def test_metrics_omit_the_eval_fields_until_the_harness_has_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = TestClient(create_app(tmp_path / "var"))
+    monkeypatch.setattr(evalfeed, "EVAL_REPORTS_DIR", tmp_path / "no-eval-yet")
+
+    payload = client.get("/metrics/summary").json()
+
+    assert_valid(payload, "MetricsSummary")
+    assert "evalPrecision" not in payload and "evalRecall" not in payload
+
+
+def test_metrics_read_eval_numbers_from_the_newest_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = TestClient(create_app(tmp_path / "var"))
+    root = tmp_path / "reports"
+    for stamp, content in {
+        "2026-09-01T00-00-00": {"evalPrecision": 0.5, "evalRecall": 0.5},
+        "2026-09-26T09-30-00": {"evalPrecision": 0.94, "evalRecall": 0.88},
+    }.items():
+        write_report(root, stamp, content)
+    monkeypatch.setattr(evalfeed, "EVAL_REPORTS_DIR", root)
+
+    assert latest_eval_metrics(root) == {"evalPrecision": 0.94, "evalRecall": 0.88}
+    payload = client.get("/metrics/summary").json()
+
+    assert_valid(payload, "MetricsSummary")
+    assert (payload["evalPrecision"], payload["evalRecall"]) == (0.94, 0.88)
+
+
+def test_a_malformed_eval_report_never_breaks_the_metrics_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = TestClient(create_app(tmp_path / "var"))
+    root = tmp_path / "reports"
+    write_report(root, "2026-09-26T00-00-00", {})  # type: ignore[arg-type]
+    (root / "2026-09-26T00-00-00" / "report.json").write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(evalfeed, "EVAL_REPORTS_DIR", root)
+
+    assert latest_eval_metrics(root) == {}
+    assert_valid(client.get("/metrics/summary").json(), "MetricsSummary")

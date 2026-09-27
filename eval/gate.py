@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from pipeline.api.repository import newest_eval_report
+from pipeline.api.evalfeed import newest_eval_report
 
 from eval.runner import DEFAULT_OUT, PRECISION_TARGET, RECALL_TARGET
 

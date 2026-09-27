@@ -15,6 +15,7 @@ Written at the end of A9. Prompts A1–A9 are committed on `track-a`; this is th
 | `pipeline/fraud/` | `score_fraud(data, checks, config)` | five mechanical features → `riskScore` (0–100), recommendation, flagged, and the internal signal list |
 | `pipeline/store/` | `JsonStore` | one JSON file per record, atomic replace, process-wide lock |
 | `pipeline/api/` | `create_app(store_root)` | the nine contract paths, service catalog, application state machine, queue, metrics |
+| `pipeline/api/evalfeed.py` | `newest_eval_report`, `latest_eval_metrics` | reads the harness's newest `report.json` once, shared by `/metrics/summary` and `eval.gate` |
 | `pipeline/logs.py` | `configure`, `event`, `warning` | one JSON object per line, context-carrying |
 | `eval/` | `python -m eval.runner`, `python -m eval.gate` | offline pass over dataset-v1 vs ground truth, `report.{json,md}`, SPEC threshold gate |
 

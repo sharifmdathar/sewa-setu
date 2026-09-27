@@ -10,17 +10,17 @@ import json
 from pathlib import Path
 
 import pytest
-from pipeline.api.repository import latest_eval_metrics
+from pipeline.api.evalfeed import latest_eval_metrics
 from pipeline.rules import load_rule_config
 
 from eval.dataset import CHECKS, DEFAULT_DATASET, load
 from eval.gate import BREACH_EXIT, MISSING_EXIT, latest_report, violations
 from eval.gate import main as gate_main
 from eval.metrics import Tally, tally, total
+from eval.report_md import render_markdown
 from eval.runner import (
     STAMP_FORMAT,
     build_payload,
-    render_markdown,
     run_pass,
     write_report,
 )
@@ -145,7 +145,7 @@ def test_the_gate_judges_the_report_the_dashboard_quotes(tmp_path: Path) -> None
     If the two ever pick differently, `eval.gate` can pass on one run while the dashboard
     quotes another - the kind of disagreement a demo never notices.
     """
-    from pipeline.api.repository import newest_eval_report
+    from pipeline.api.evalfeed import newest_eval_report
 
     from eval.gate import latest_report
 
@@ -164,8 +164,6 @@ def test_the_gate_judges_the_report_the_dashboard_quotes(tmp_path: Path) -> None
 
 
 def test_the_markdown_states_the_verdict_and_how_to_reproduce(payload: dict[str, object]) -> None:
-    from eval.runner import render_markdown
-
     markdown = render_markdown(payload)
 
     assert "**PASS**" in markdown
@@ -175,8 +173,6 @@ def test_the_markdown_states_the_verdict_and_how_to_reproduce(payload: dict[str,
 
 
 def test_the_markdown_reports_a_breach_as_a_breach(tmp_path: Path) -> None:
-    from eval.runner import render_markdown
-
     failing = report_payload(precision=0.80, recall=0.80)
 
     assert violations(failing) != []
