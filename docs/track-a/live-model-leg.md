@@ -146,12 +146,34 @@ it omits rather than invents — which is the dangerous direction here, because 
 document whose expiry it was given. That is why C2 now warns when a document of an expiring type
 states no expiry (`rules.yaml -> expiryExpectedDocTypes`), instead of reading silence as validity.
 
-Two consequences for the submission: at the corpus mean of 4.6 documents per application, p50 is
-~13 s and p95 is ~83 s — **SPEC §2's "< 60 s" holds at p50 and breaches at p95**; and the 23.8 s
-worst observation sits close to the 30 s call timeout, so a slow document can fail a run outright.
+Two consequences for the submission. SPEC §2's "< 60 s" measured **13.3 s mean, 15.5 s worst per
+application** (2 applications, 9 documents, cache off) - inside the target, but on a sample of two,
+so quote it as an observation rather than a distribution. And the 23.8 s single-document worst sits
+close to the 30 s call timeout, so one slow page can fail a run outright.
 
 What this still does not cover: a real scan. These are clean rendered documents, so everything
 above is a ceiling, not an expectation, on phone-photo input.
+
+## Parallelism costs more than it saves on a throttled tier
+
+Reading an application's documents at once is the obvious fix for the p95 above, and the code does
+it (`LLM_MAX_CONCURRENCY`, overlapping reads, order preserved). Measured against NVIDIA with the
+cache off, on the same two applications and nine documents:
+
+| | per application | per document |
+| --- | --- | --- |
+| sequential (`LLM_MAX_CONCURRENCY=1`) | **13.3 s** mean, 15.5 s worst | ~5.9 s |
+| parallel (4) | 17.3 s mean, 20.4 s worst | ~7.7 s |
+
+Parallel was **30 % worse**, because every document got slower: the limit is per account, not per
+connection, so four in-flight requests queue against each other. The default is therefore **1**,
+and the mechanism stays for an endpoint that is not throttling you — a local Ollama, or a paid key
+with headroom — where it is a real 4x. The unit test that proves the overlap uses a local endpoint
+with a 0.3 s-per-request delay, which is exactly the unthrottled case the public tier is not.
+
+Two things this does not fix: the p95 breach is a property of the model's per-document latency, not
+of the ordering, and the 30 s call timeout still sits uncomfortably close to the 23.8 s worst
+observation. Batching, a faster model, or a longer timeout are the levers left.
 
 ## The trap that costs the most time
 

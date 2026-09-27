@@ -71,20 +71,23 @@ with planted anomalies, seed 42, as of 2026-06-30:
 | Application risk-flag recall | n/a | 0.54 (precision 1.00, accuracy 0.89) | disclosed, not gated |
 | Scrutiny time / application | 12–18 min | see below | < 60 s |
 
-Latency at four levels, because the honest answer depends on which one is being asked about:
+Latency at five levels, because the honest answer depends on which one is being asked about:
 
 | What was timed | Result | Source |
 | --- | --- | --- |
 | Pipeline in-process, offline, no HTTP, no store | 0.11 ms mean / 0.30 ms worst per application | eval report |
 | The officer's actual wait on the rules-only path: `POST .../scrutiny/run` over HTTP, store writes included | **p50 3.0 ms, p95 3.2 ms, max 3.7 ms** (100 runs / 20 apps); 5.6 ms on the first call after a cold start | `pipeline.scripts.bench_scrutiny` |
 | Same route with the server's own clock | 1.1–1.3 ms, so ~1.8 ms of the client figure is HTTP, JSON and the write | `/metrics/summary` |
-| **One document through a live VLM** (`meta/llama-3.2-11b-vision-instruct`) | p50 2.8 s, p95 18.2 s, max 23.8 s. At the corpus mean of 4.6 documents per application that is **~13 s at p50 and ~83 s at p95** | `eval/reports/image-leg/2026-09-27T21-06-19` |
+| **One document through a live VLM** (`meta/llama-3.2-11b-vision-instruct`) | p50 2.8 s, p95 18.2 s, max 23.8 s (20 documents) | `eval/reports/image-leg/2026-09-27T21-06-19` |
+| **A whole application through a live VLM** (2 applications / 9 documents, cache off) | **13.3 s mean, 15.5 s worst.** Reading four documents at a time made it *worse* — 17.3 s — because the free tier throttles per account, so the shipped default is sequential | `python -m eval.runner --limit 2` against NVIDIA |
 
-**Quote the second row for what this POC runs today, and the fourth for what a model in the loop
-costs.** The 0.11 ms figure is real but it is not what anyone waits for. And the fourth row is the
-one that puts SPEC §2's "< 60 s" in question rather than comfortably met: at p95 the model path
-breaches it, and the 23.8 s worst observation sits close to the 30 s call timeout, so a slow
-document can fail the run rather than merely delay it.
+**Quote the second row for what this POC runs today, and the fourth and fifth for what a model in the loop
+costs.** The 0.11 ms figure is real but it is not what anyone waits for. And the model rows are where SPEC §2's "< 60 s" stops being trivially met. The measured
+per-application figure is 13.3 s mean and 15.5 s worst, which is inside the target - but on two
+applications only, so it is a thin sample, not a distribution. The tail risk is per document:
+23.8 s worst observed sits close to the 30 s call timeout, so one slow document can fail a run
+rather than merely delay it. Parallelising the reads, the obvious fix, measured 30% worse on this
+tier because the throttle is per account; see `docs/track-a/live-model-leg.md`.
 
 ### Read-back accuracy, measured separately from judgement
 
@@ -125,8 +128,9 @@ expiry date reads as a document that cannot be expired.
   adjudication. Over 20 rendered documents a live VLM read **107 of 124** stated field values
   (recall 0.86, precision 0.98) and completed only **5 of 20** documents without an omission, at
   p50 2.8 s / p95 18.2 s per document. Two consequences are carried through this draft rather than
-  footnoted: the "< 60 s" claim of SPEC §2 holds at p50 (~13 s for a 4.6-document application) and
-  **breaches at p95** (~83 s); and the field the model drops most (`expiryDate`, read on 4 of the
+  footnoted: the "< 60 s" claim of SPEC §2 measured 13.3 s mean and 15.5 s worst per application -
+  inside the target, but on a sample of two applications, and with a 23.8 s single-document tail
+  close to the 30 s timeout; and the field the model drops most (`expiryDate`, read on 4 of the
   18 documents that state it) is precisely the input C2 needs — which is why C2 now warns instead
   of passing when an expiring document states no expiry date.
 - **The rules-only gate is unaffected by that change, and that is the point.** Re-running

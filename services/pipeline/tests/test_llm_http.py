@@ -21,8 +21,8 @@ from helpers import doc_text, make_input
 
 from pipeline.agent import DeterministicAdjudicator, run_scrutiny
 from pipeline.agent.adjudicator import AdjudicationError, LLMAdjudicator
-from pipeline.agent.report import _reads_in_parallel
-from pipeline.config import LlmSettings
+from pipeline.agent.report import _read_workers
+from pipeline.config import MAX_CONCURRENCY, LlmSettings
 from pipeline.extraction import (
     DocumentContent,
     ExtractionError,
@@ -217,7 +217,7 @@ def test_documents_in_one_application_are_read_overlapping() -> None:
         report = run_scrutiny(
             make_input([], required=("aadhaar",)),
             _many_documents(4),
-            extractor=LLMExtractor(settings=_settings(endpoint)),
+            extractor=LLMExtractor(settings=_settings(endpoint, max_concurrency=4)),
             adjudicator=DeterministicAdjudicator(),
         )
         elapsed = time.perf_counter() - started
@@ -229,10 +229,19 @@ def test_documents_in_one_application_are_read_overlapping() -> None:
     )
 
 
-def test_only_the_networked_reader_gets_threads() -> None:
+def test_only_a_networked_reader_with_headroom_gets_threads() -> None:
     documents = _many_documents(4)
     with FakeEndpoint(reply=EXTRACTION_REPLY) as endpoint:
-        reader = LLMExtractor(settings=_settings(endpoint))
-        assert _reads_in_parallel(reader, documents) is True
-        assert _reads_in_parallel(reader, documents[:1]) is False, "one read cannot overlap"
-        assert _reads_in_parallel(TemplateExtractor(), documents) is False
+        parallel = LLMExtractor(settings=_settings(endpoint, max_concurrency=4))
+        assert _read_workers(parallel, documents) == 4
+        assert _read_workers(parallel, documents[:1]) == 1, "one read cannot overlap"
+        assert _read_workers(TemplateExtractor(), documents) == 1, "no threads for parsing"
+        assert _read_workers(LLMExtractor(settings=_settings(endpoint)), documents) == 1
+
+
+def test_the_shipped_default_is_sequential_because_the_tier_throttles() -> None:
+    """Measured on the free NVIDIA tier: 9 documents cost 53 s in series and 69 s in parallel,
+    because the limit is per account, not per connection. Raise the knob only against an
+    endpoint that is not throttling you."""
+
+    assert MAX_CONCURRENCY == 1

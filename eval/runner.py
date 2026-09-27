@@ -119,7 +119,12 @@ def pipeline_of(rows: list[tuple[Case, ScrutinyReport, float]]) -> dict[str, Any
         "live": live,
     }
     if live:
-        provenance["cache"] = combined_stats()
+        from pipeline.config import get_llm_settings
+
+        provenance["cache"] = {
+            **combined_stats(),
+            "enabled": get_llm_settings().cache_enabled,
+        }
     return provenance
 
 
@@ -206,7 +211,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"path      : {used['extractor']} + {used['adjudicator']} ({model})")
     if used.get("cache"):
         cache = used["cache"]
-        print(f"llm calls : {cache['misses']} new, {cache['hits']} served from cache")
+        if cache.get("enabled"):
+            print(f"llm calls : {cache['misses']} new, {cache['hits']} served from cache")
+        else:
+            print("llm calls : cache off (LLM_CACHE=0), so every read reached the endpoint")
     print(
         f"fail-flags: precision {payload['evalPrecision']:.2f} "
         f"recall {payload['evalRecall']:.2f} | risk-flag recall "

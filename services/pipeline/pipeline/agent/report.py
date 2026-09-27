@@ -90,29 +90,36 @@ def _evidence_of(document: DocumentContent, extractor: DocumentExtractor) -> Doc
     )
 
 
-def _reads_in_parallel(reader: DocumentExtractor, documents: Sequence[DocumentContent]) -> bool:
-    """Threads pay for themselves only when a read is a network round trip.
+def _read_workers(reader: DocumentExtractor, documents: Sequence[DocumentContent]) -> int:
+    """How many documents to read at once.
 
-    Template parsing is sub-millisecond, so parallelising it would add pool overhead to the
-    rules-only path — the one whose 3 ms figure the demo quotes.
+    One, unless a networked reader has more than one document to do. Template parsing is
+    sub-millisecond, so threads would only add pool overhead to the rules-only path whose 3 ms
+    figure the demo quotes; and the shipped concurrency default is itself one, because the
+    free-tier endpoint measured in `docs/track-a/live-model-leg.md` throttles per account.
     """
-    return len(documents) > 1 and getattr(reader, "name", "") != TemplateExtractor.name
+    if len(documents) < 2 or getattr(reader, "name", "") == TemplateExtractor.name:
+        return 1
+    settings = getattr(reader, "settings", None) or get_llm_settings()
+    return min(settings.max_concurrency, len(documents))
 
 
 def _extract_all(
     documents: Sequence[DocumentContent], reader: DocumentExtractor
 ) -> list[DocEvidence]:
-    """Read an application's documents, overlapping the model round trips but keeping the order.
+    """Read an application's documents, overlapping model round trips but keeping the order.
 
     `pool.map` yields results in input order, so the report's `extractedFields` and the checks
     cannot depend on which thread finished first.
     """
-    if not _reads_in_parallel(reader, documents):
-        return [_evidence_of(document, reader) for document in documents]
-    settings = getattr(reader, "settings", None) or get_llm_settings()
-    workers = min(settings.max_concurrency, len(documents))
+    def read(document: DocumentContent) -> DocEvidence:
+        return _evidence_of(document, reader)
+
+    workers = _read_workers(reader, documents)
+    if workers < 2:
+        return [read(document) for document in documents]
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(lambda document: _evidence_of(document, reader), documents))
+        return list(pool.map(read, documents))
 
 
 def _severity_for(status: CheckStatus, rule: CheckConfig) -> CheckSeverity:

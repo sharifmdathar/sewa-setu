@@ -31,8 +31,8 @@ exactly why this step exists: **leave it unsourced.**
 
 | | rules-only (no key in env) | live model leg |
 | --- | --- | --- |
-| one scrutiny, over HTTP | p50 **3.0 ms** (measured, 100 runs) | ~13 s at p50, ~83 s at p95 (projected from 2.8 s / 18.2 s per document × 4.6 documents) |
-| the script's "watch this take 40 seconds" | lands | dies in a spinner |
+| one scrutiny, over HTTP | p50 **3.0 ms** (measured, 100 runs) | **13.3 s mean, 15.5 s worst** per application (measured, 2 applications) |
+| the script's "watch this take 40 seconds" | lands | 13 s of spinner per application |
 
 ```bash
 env | grep '^LLM_' || echo "clean: no model in this shell"   # expect "clean"

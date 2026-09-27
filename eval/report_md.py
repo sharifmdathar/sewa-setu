@@ -71,11 +71,16 @@ def _provenance_lines(provenance: dict[str, Any]) -> list[str]:
     ]
     cache = provenance.get("cache") or {}
     if provenance.get("live"):
-        new = cache.get("misses", 0)
-        hits = cache.get("hits", 0)
-        lines.append(
-            f"- model calls: {new} answered by the endpoint, {hits} served from the disk cache"
-        )
+        if cache.get("enabled", True):
+            lines.append(
+                f"- model calls: {cache.get('misses', 0)} answered by the endpoint, "
+                f"{cache.get('hits', 0)} served from the disk cache"
+            )
+        else:
+            lines.append(
+                "- model calls: the cache was off (`LLM_CACHE=0`), so every read reached the "
+                "endpoint - this run's latency is a cold-path figure"
+            )
         lines += [
             "",
             "This is the live leg: every document was read through the endpoint named above, so",

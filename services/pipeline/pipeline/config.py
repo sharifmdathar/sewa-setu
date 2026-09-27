@@ -13,10 +13,13 @@ LLM_MAX_RETRIES = 2
 BACKOFF_BASE_SECONDS = 1.0
 BACKOFF_CAP_SECONDS = 30.0
 
-# Documents in one application are read concurrently, because each read is a network round trip
-# and an application averages 4.6 of them. Bounded so one big filing cannot monopolise a
-# rate-limited free-tier key.
-MAX_CONCURRENCY = 4
+# Documents in one application *can* be read concurrently, but the measured default is one.
+# On the free-tier NVIDIA endpoint, four parallel reads made every document slower and the
+# application 30% worse: 9 documents took 53 s in series and 69 s in parallel (5.9 s -> 7.7 s
+# per document), because the throttle is per account rather than per connection. Set
+# LLM_MAX_CONCURRENCY higher only against an endpoint that is not rate-limiting you - a local
+# model, or a paid key with headroom.
+MAX_CONCURRENCY = 1
 
 # Lives under the var/ dir on purpose: cached model output is derived data, never a source
 # file, and it can be several hundred entries. `store.jsonstore` keeps the JSON store there.
