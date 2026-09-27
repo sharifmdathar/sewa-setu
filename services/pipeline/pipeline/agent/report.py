@@ -1,4 +1,4 @@
-"""Scrutiny orchestrator: extract -> rule -> adjudicate -> contract ScrutinyReport."""
+"""Scrutiny orchestrator: extract -> rule -> adjudicate -> score -> contract report."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pipeline.agent.adjudicator import (
     DeterministicAdjudicator,
     LLMAdjudicator,
 )
-from pipeline.agent.models import Adjudication, ModelMeta, Recommendation, ScrutinyReport
+from pipeline.agent.models import Adjudication, ModelMeta, ScrutinyReport
 from pipeline.config import get_llm_settings
 from pipeline.extraction import (
     DocumentContent,
@@ -25,6 +25,7 @@ from pipeline.extraction import (
     LLMExtractor,
     TemplateExtractor,
 )
+from pipeline.fraud.scorer import score_fraud
 from pipeline.rules import (
     DocEvidence,
     RuleConfig,
@@ -116,36 +117,6 @@ def _adjudicate(
     return settled
 
 
-def provisional_risk_score(checks: Sequence[ScrutinyCheck], config: RuleConfig) -> int:
-    """Weighted sum of the checks that did not pass.
-
-    Interim only: the fraud scorer (A6) replaces this with feature-based scoring.
-    """
-    score = 0.0
-    for check in checks:
-        if check.status in ("fail", "warn"):
-            rule = config.checks[check.check_id]
-            score += rule.weight * config.severity_multipliers[check.severity]
-    return max(0, min(100, round(score)))
-
-
-def provisional_recommendation(
-    score: int, checks: Sequence[ScrutinyCheck], config: RuleConfig
-) -> Recommendation:
-    """SPEC.md section 5: the agent recommends, and rejects only on high-severity fails."""
-    thresholds = config.recommendation_thresholds
-    high_severity_fail = any(
-        check.status == "fail" and check.severity == "high" for check in checks
-    )
-    if score >= thresholds["rejectMinScore"] and high_severity_fail:
-        return "reject"
-    if score >= thresholds["manualReviewMinScore"]:
-        return "manual_review"
-    if score >= thresholds["requestInfoMinScore"]:
-        return "request_info"
-    return "approve"
-
-
 def _component_model(component: DocumentExtractor | Adjudicator) -> str:
     meta = component.last_meta
     return meta.model if meta is not None else "code"
@@ -187,15 +158,15 @@ def run_scrutiny(
     evidence = [_evidence_of(document, reader) for document in documents]
     data = application.model_copy(update={"documents": evidence})
     checks = _adjudicate(run_rules(data, rules), data, judge, rules)
-    score = provisional_risk_score(checks, rules)
+    risk = score_fraud(data, checks, rules)
 
     return ScrutinyReport(
         applicationId=data.application_id,
         generatedAt=generated_at or dt.datetime.now(dt.UTC),
         extractedFields={item.document_id: item.fields.as_json() for item in evidence},
         checks=checks,
-        riskScore=score,
-        recommendation=provisional_recommendation(score, checks, rules),
+        riskScore=risk.risk_score,
+        recommendation=risk.recommendation,
         modelMeta=_model_meta(
             reader, judge, int(round((time.perf_counter() - started) * 1000)), rules
         ),

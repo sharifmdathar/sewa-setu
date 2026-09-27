@@ -6,8 +6,9 @@ import datetime as dt
 import hashlib
 from typing import Any
 
-from pipeline.extraction import DocumentContent, ExtractedFields, TemplateExtractor
-from pipeline.rules import DocEvidence, ScrutinyInput
+from pipeline.agent import Adjudication, DeterministicAdjudicator
+from pipeline.extraction import CallMeta, DocumentContent, ExtractedFields, TemplateExtractor
+from pipeline.rules import DocEvidence, ScrutinyCheck, ScrutinyInput
 
 AS_OF = dt.date(2026, 6, 30)
 GOOD_AUTHORITY = "Unique Fictiona Identity Authority"
@@ -97,3 +98,28 @@ def make_input(
         duplicateSha256=list(duplicate_sha256),
         asOf=AS_OF,
     )
+
+
+class ScriptedAdjudicator:
+    """A model-free adjudicator: answers from a dict keyed by check, recording what it was asked.
+
+    Anything not scripted keeps the rule verdict, so it doubles as a spy on which checks the
+    orchestrator considered ambiguous.
+    """
+
+    name = "scripted"
+
+    def __init__(self, verdicts: dict[str, Adjudication] | None = None) -> None:
+        self.verdicts = verdicts or {}
+        self.asked: list[str] = []
+        self._fallback = DeterministicAdjudicator()
+
+    @property
+    def last_meta(self) -> CallMeta | None:
+        return None
+
+    def adjudicate(self, check: ScrutinyCheck, data: ScrutinyInput) -> Adjudication:
+        self.asked.append(check.check_id)
+        if check.check_id in self.verdicts:
+            return self.verdicts[check.check_id]
+        return self._fallback.adjudicate(check, data)
