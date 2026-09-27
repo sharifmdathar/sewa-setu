@@ -27,7 +27,7 @@ class ScrutinyReport(CamelModel):
 
     application_id: str
     generated_at: dt.datetime
-    extracted_fields: dict[str, Any] = Field(default_factory=dict)
+    extracted_fields: dict[str, Any]
     checks: list[ScrutinyCheck]
     risk_score: int = Field(ge=0, le=100)
     recommendation: Recommendation
