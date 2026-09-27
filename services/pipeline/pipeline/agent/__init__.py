@@ -13,8 +13,6 @@ from pipeline.agent.models import Adjudication, ModelMeta, Recommendation, Scrut
 from pipeline.agent.report import (
     default_adjudicator,
     default_extractor,
-    provisional_recommendation,
-    provisional_risk_score,
     run_scrutiny,
     sha256_of_content,
 )
@@ -31,8 +29,6 @@ __all__ = [
     "ScrutinyReport",
     "default_adjudicator",
     "default_extractor",
-    "provisional_recommendation",
-    "provisional_risk_score",
     "run_scrutiny",
     "sha256_of_content",
 ]
