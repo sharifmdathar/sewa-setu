@@ -7,6 +7,7 @@ import datetime as dt
 import hashlib
 import time
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 
 from pipeline.agent.adjudicator import (
     AMBIGUOUS_STATUSES,
@@ -87,6 +88,31 @@ def _evidence_of(document: DocumentContent, extractor: DocumentExtractor) -> Doc
         sha256=sha256_of_content(document),
         fields=fields,
     )
+
+
+def _reads_in_parallel(reader: DocumentExtractor, documents: Sequence[DocumentContent]) -> bool:
+    """Threads pay for themselves only when a read is a network round trip.
+
+    Template parsing is sub-millisecond, so parallelising it would add pool overhead to the
+    rules-only path — the one whose 3 ms figure the demo quotes.
+    """
+    return len(documents) > 1 and getattr(reader, "name", "") != TemplateExtractor.name
+
+
+def _extract_all(
+    documents: Sequence[DocumentContent], reader: DocumentExtractor
+) -> list[DocEvidence]:
+    """Read an application's documents, overlapping the model round trips but keeping the order.
+
+    `pool.map` yields results in input order, so the report's `extractedFields` and the checks
+    cannot depend on which thread finished first.
+    """
+    if not _reads_in_parallel(reader, documents):
+        return [_evidence_of(document, reader) for document in documents]
+    settings = getattr(reader, "settings", None) or get_llm_settings()
+    workers = min(settings.max_concurrency, len(documents))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(lambda document: _evidence_of(document, reader), documents))
 
 
 def _severity_for(status: CheckStatus, rule: CheckConfig) -> CheckSeverity:
@@ -177,7 +203,7 @@ def run_scrutiny(
     judge = adjudicator if adjudicator is not None else default_adjudicator()
     rules = config if config is not None else load_rule_config()
 
-    evidence = [_evidence_of(document, reader) for document in documents]
+    evidence = _extract_all(documents, reader)
     data = application.model_copy(update={"documents": evidence})
     checks = _adjudicate(run_rules(data, rules), data, judge, rules)
     risk = score_fraud(data, checks, rules)

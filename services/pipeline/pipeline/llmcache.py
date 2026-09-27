@@ -17,30 +17,37 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
 from pipeline.config import LlmSettings
 
 CACHE_VERSION = 1
+_COUNTERS = ("hits", "misses", "writes", "errors")
 
 
 class CacheStats:
-    """Mutable counters, reported in the eval payload so a cached run is visible as one."""
+    """Mutable counters, reported in the eval payload so a cached run is visible as one.
+
+    Guarded because documents in one application are now read concurrently, and `x += 1` is a
+    read-modify-write that loses increments under a race.
+    """
 
     def __init__(self) -> None:
         self.hits = 0
         self.misses = 0
         self.writes = 0
         self.errors = 0
+        self._lock = threading.Lock()
+
+    def count(self, name: str) -> None:
+        with self._lock:
+            setattr(self, name, getattr(self, name) + 1)
 
     def as_dict(self) -> dict[str, int]:
-        return {
-            "hits": self.hits,
-            "misses": self.misses,
-            "writes": self.writes,
-            "errors": self.errors,
-        }
+        with self._lock:
+            return {name: getattr(self, name) for name in _COUNTERS}
 
     @property
     def calls_avoided(self) -> int:
@@ -83,16 +90,16 @@ class ResponseCache:
         try:
             payload = json.loads(self.path_for(key).read_text(encoding="utf-8"))
         except FileNotFoundError:
-            self.stats.misses += 1
+            self.stats.count("misses")
             return None
         except (OSError, ValueError):
-            self.stats.errors += 1
+            self.stats.count("errors")
             return None
         content = payload.get("content") if isinstance(payload, dict) else None
         if not isinstance(content, str):
-            self.stats.errors += 1
+            self.stats.count("errors")
             return None
-        self.stats.hits += 1
+        self.stats.count("hits")
         return content
 
     def put(self, key: str, *, content: str, model: str) -> None:
@@ -108,9 +115,9 @@ class ResponseCache:
                 json.dump(record, stream, ensure_ascii=False)
             os.replace(temp, self.path_for(key))
             temp = None
-            self.stats.writes += 1
+            self.stats.count("writes")
         except OSError:
-            self.stats.errors += 1
+            self.stats.count("errors")
         finally:
             if temp is not None:
                 with contextlib.suppress(OSError):
@@ -118,22 +125,26 @@ class ResponseCache:
 
 
 _CACHES: dict[str, ResponseCache] = {}
+_CACHES_LOCK = threading.Lock()
 
 
 def cache_for(settings: LlmSettings) -> ResponseCache:
     """The process-wide cache for a settings' directory (one per dir, so stats aggregate)."""
     directory = str(settings.resolved_cache_dir)
-    found = _CACHES.get(directory)
-    if found is None:
-        found = ResponseCache(Path(directory), enabled=settings.cache_enabled)
-        _CACHES[directory] = found
-    return found
+    with _CACHES_LOCK:
+        found = _CACHES.get(directory)
+        if found is None:
+            found = ResponseCache(Path(directory), enabled=settings.cache_enabled)
+            _CACHES[directory] = found
+        return found
 
 
 def combined_stats() -> dict[str, int]:
     """Summed hit/miss/write counts across every cache this process has used."""
     total = {"hits": 0, "misses": 0, "writes": 0, "errors": 0}
-    for cache in _CACHES.values():
+    with _CACHES_LOCK:
+        caches = list(_CACHES.values())
+    for cache in caches:
         for name, value in cache.stats.as_dict().items():
             total[name] += value
     return total
@@ -141,4 +152,5 @@ def combined_stats() -> dict[str, int]:
 
 def reset_caches() -> None:
     """Drop every cached instance (tests, or a settings change mid-process)."""
-    _CACHES.clear()
+    with _CACHES_LOCK:
+        _CACHES.clear()

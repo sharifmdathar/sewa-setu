@@ -11,6 +11,7 @@ No test in this file needs `LLM_API_KEY` or any network beyond a loopback port.
 from __future__ import annotations
 
 import base64
+import time
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +21,14 @@ from helpers import doc_text, make_input
 
 from pipeline.agent import DeterministicAdjudicator, run_scrutiny
 from pipeline.agent.adjudicator import AdjudicationError, LLMAdjudicator
+from pipeline.agent.report import _reads_in_parallel
 from pipeline.config import LlmSettings
-from pipeline.extraction import DocumentContent, ExtractionError, LLMExtractor
+from pipeline.extraction import (
+    DocumentContent,
+    ExtractionError,
+    LLMExtractor,
+    TemplateExtractor,
+)
 from pipeline.llmcache import reset_caches
 from pipeline.rules.models import ScrutinyCheck
 
@@ -188,3 +195,44 @@ def test_a_full_scrutiny_run_names_the_model_that_answered() -> None:
     assert report.model_meta.versions["extractor"] == SERVED, "the served model, not the requested"
     assert endpoint.count == 1
     assert 0 <= report.risk_score <= 100
+
+
+def _many_documents(count: int) -> list[DocumentContent]:
+    """Distinct documents, so the cache cannot collapse four reads into one."""
+    return [
+        DocumentContent(
+            documentId=f"DOC-{index}",
+            docType="aadhaar",
+            fileName=f"app-{index}.txt",
+            text=doc_text(name=f"Applicant {index}"),
+        )
+        for index in range(1, count + 1)
+    ]
+
+
+def test_documents_in_one_application_are_read_overlapping() -> None:
+    """An application averages 4.6 documents, so the slowest part of it used to be sequential."""
+    with FakeEndpoint(reply=EXTRACTION_REPLY, delay=0.30) as endpoint:
+        started = time.perf_counter()
+        report = run_scrutiny(
+            make_input([], required=("aadhaar",)),
+            _many_documents(4),
+            extractor=LLMExtractor(settings=_settings(endpoint)),
+            adjudicator=DeterministicAdjudicator(),
+        )
+        elapsed = time.perf_counter() - started
+
+    assert endpoint.count == 4, "four distinct documents should be four distinct reads"
+    assert elapsed < 0.9, f"reads did not overlap: {elapsed:.2f}s against 4 x 0.30s in series"
+    assert list(report.extracted_fields) == ["DOC-1", "DOC-2", "DOC-3", "DOC-4"], (
+        "parallel reads must not reorder the report"
+    )
+
+
+def test_only_the_networked_reader_gets_threads() -> None:
+    documents = _many_documents(4)
+    with FakeEndpoint(reply=EXTRACTION_REPLY) as endpoint:
+        reader = LLMExtractor(settings=_settings(endpoint))
+        assert _reads_in_parallel(reader, documents) is True
+        assert _reads_in_parallel(reader, documents[:1]) is False, "one read cannot overlap"
+        assert _reads_in_parallel(TemplateExtractor(), documents) is False

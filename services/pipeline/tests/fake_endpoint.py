@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -34,6 +35,7 @@ class _State:
         reject_json_mode: bool,
         hard_status: int | None,
         raw_content: str | None,
+        delay: float,
     ) -> None:
         self.reply = reply
         self.served_model = served_model
@@ -41,6 +43,7 @@ class _State:
         self.reject_json_mode = reject_json_mode
         self.hard_status = hard_status
         self.raw_content = raw_content
+        self.delay = delay
         self.requests: list[dict[str, Any]] = []
 
     @property
@@ -70,6 +73,8 @@ class _Handler(BaseHTTPRequestHandler):
 
         state.requests.append(body)
         seen = len(state.requests)
+        if state.delay:
+            time.sleep(state.delay)  # a model that is slow, not broken
 
         if state.hard_status is not None:
             self._reply(state.hard_status, {"error": {"message": "rejected by the endpoint"}})
@@ -122,6 +127,7 @@ class FakeEndpoint:
         reject_json_mode: bool = False,
         hard_status: int | None = None,
         raw_content: str | None = None,
+        delay: float = 0.0,
     ) -> None:
         self._state = _State(
             reply=reply or {"ok": True},
@@ -130,6 +136,7 @@ class FakeEndpoint:
             reject_json_mode=reject_json_mode,
             hard_status=hard_status,
             raw_content=raw_content,
+            delay=delay,
         )
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self._server.state = self._state  # type: ignore[attr-defined]
