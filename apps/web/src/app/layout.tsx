@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import localFont from "next/font/local";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
+import { JourneyNav } from "@/components/JourneyNav";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -39,6 +40,7 @@ export default function RootLayout({
             </Link>
             <RoleSwitcher />
           </div>
+          <JourneyNav />
         </header>
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
           {children}

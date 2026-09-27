@@ -67,14 +67,6 @@ export default async function OfficerQueuePage({
             Sorted by risk (highest first) · {filtered.length} of {rows.length} shown
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/officer/dashboard"
-            className="text-sm font-medium text-zinc-700 underline"
-          >
-            Metrics dashboard →
-          </Link>
-        </div>
         <form method="get" className="flex items-center gap-2 text-sm">
           <label htmlFor="f-status" className="sr-only">
             Filter by status
