@@ -67,3 +67,32 @@ Track A may populate them when available.
 ## Do not action yet
 Apply only during the paired integration phase (M4). Until then Track B codes
 against the optional-fields shape above defensively (feature-detects presence).
+
+## Validated diff (ready to apply — additive, backward compatible)
+
+Two additions inside `MetricsSummary.properties`. **`required` stays at the current 6** — both
+arrays are optional, so today's no-series payload remains valid:
+
+```yaml
+            applicationsByDay:
+              { type: array, items: { type: object, required: [date, count],
+                properties: { date: { type: string, format: date },
+                              count: { type: integer, minimum: 0 } } } }
+            riskDistribution:
+              { type: array, items: { type: object, required: [band, count],
+                properties: { band: { type: string, enum: [low, medium, high] },
+                              count: { type: integer, minimum: 0 } } } }
+```
+
+**Track A landing:** populate both in `repository.metrics()` from `createdAt` days and the
+`<30 / 30–59 / ≥60` bands (SPEC §7 flag threshold); **omit** either when there is no data (the UI
+feature-detects). Note: `format: date` validation was added to `tests/contract.py` as part of
+this — without it a malformed date would silently pass.
+
+**Track B landing:** switch the two dashboard charts from the `getQueue` stopgap to
+`getMetrics.applicationsByDay` / `.riskDistribution` (feature-detect, fall back to the current
+derivation when absent) — a one-line data-source change in `officer/dashboard/page.tsx`.
+
+**Validation (pre-applied to a copy):** both-series payload accepted; today's no-series payload
+still accepted (backward compatible); non-ISO date, band outside the enum, missing `count`, and
+negative `count` all rejected.

@@ -40,3 +40,27 @@ when the `decided` filter is active.
 ## Do not action yet
 Resolve during the paired integration phase (M4). Track B codes defensively against
 the current pending-only assumption.
+
+## Validated diff (ready to apply — no schema change)
+
+Single description edit under `/officer/queue` → 200:
+
+```diff
+-              description: pending apps w/ risk,
++              description: all apps w/ status + risk,
+```
+
+**Track A landing (behaviour, not schema):**
+- `pipeline/api/repository.py`: `QUEUE_STATUS = "scrutiny_done"` and the `status != QUEUE_STATUS`
+  filter in `queue()` are why a `submitted` app is invisible (verified live: queue returned `[]`
+  while the app sat in the store). Drop the filter, keep the risk-desc sort, remove `QUEUE_STATUS`.
+- Make `metrics.pending` and `queue` share **one** status set. Today they disagree:
+  `/metrics/summary` counted a `submitted` app as pending (`pending: 21`) while `/officer/queue`
+  listed 20 — same root cause, same fix. Otherwise the officer dashboard's Pending card won't
+  reconcile with the queue length.
+
+**Track B landing:** none — the officer page already filters whatever `getQueue` returns
+client-side, so it becomes correct the moment the queue returns all statuses.
+
+**Validation (pre-applied to a copy):** `status: decided` accepted, `status: closed` rejected
+(enum unchanged). Backward compatible — existing consumers unaffected.
