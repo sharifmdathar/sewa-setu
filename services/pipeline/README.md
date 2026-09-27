@@ -191,6 +191,12 @@ failures reports precision 1.00 and recall 1.00 built on zero evidence - `--limi
 does exactly that - so the gate calls it a breach ("the run judged nothing", exit 1) and
 `/metrics/summary` serves neither eval key rather than quoting it.
 
+A second harness scores *reading* rather than judging: `python -m eval.image_leg` compares what an
+extractor returns for each rendered `docs_img/*.png` against `image_manifest.json`, and reports
+field recall, field precision (an invented value is worse than a blank one) and the clean-document
+rate. `--reader text` is the deterministic control and needs no endpoint; it currently scores
+124/124 stated values over 20 documents. See `docs/track-a/live-model-leg.md`.
+
 `avgScrutinySeconds` is measured per application at the route (intake, extraction, rules,
 adjudication, scoring, persistence) and kept in the store as `scrutinyMs`, which never goes on the
 wire. It is not read from `modelMeta.latencyMs`: that field is an integer millisecond per the

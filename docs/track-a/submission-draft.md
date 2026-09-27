@@ -26,8 +26,8 @@ engine C1–C5 (`rules.yaml`, versioned in the report) → adjudicator (`warn`/a
 scorer → `ScrutinyReport` + riskScore + recommendation → JSON file store. Offline over the same
 pipeline: the synthetic generator and the eval harness.
 
-Code size as measured: 3,956 lines of pipeline, 1,040 eval, 1,052 generator, 4,511 test lines
-across 247 + 17 tests. State and reporting are separate modules rather than one service class:
+Code size as measured: 3,991 lines of pipeline, 1,829 eval, 1,052 generator, 5,108 test lines
+across 247 + 32 tests. State and reporting are separate modules rather than one service class:
 `pipeline/api/repository.py` performs transitions, `pipeline/api/readmodel.py` answers questions
 about the records it wrote.
 
@@ -79,6 +79,21 @@ Latency at three levels, because the honest answer depends on which one is being
 
 **Quote the middle row.** The 0.11 ms figure is real but it is not what anyone waits for.
 
+### Read-back accuracy, measured separately from judgement
+
+`python -m eval.image_leg` compares what an extractor returns for each rendered
+`docs_img/*.png` against the field values the generator wrote into it: field recall, field
+precision (an invented value counts against the model, a blank one does not) and the
+whole-document clean-read rate.
+
+| Reader | Documents | Stated values | Correct | Clean reads |
+| --- | --- | --- | --- | --- |
+| deterministic template parser — the control, no model | 20 | 124 | 124 (recall 1.00, precision 1.00) | 20 of 20 |
+| VLM over the same PNGs | *pending an endpoint* | | | |
+
+The control row earns its place by being boring: it shows the yardstick and the ground truth
+agree, so whatever the model row says afterwards differs for reasons about the model.
+
 ## 5. Acceptance criteria (SPEC §8) status
 
 | # | Criterion | Status |
@@ -95,7 +110,8 @@ Latency at three levels, because the honest answer depends on which one is being
   template extraction, deterministic adjudication. The VLM path was verified end-to-end against a
   local stand-in endpoint that 429s on purpose (666 ms/application mean over `--limit 2`,
   `docs/track-a/live-model-leg.md`). That number is plumbing, not a vendor's latency or accuracy,
-  and the submission should not let it read as either.
+  and the submission should not let it read as either. The read-back yardstick in §4 exists and its
+  control passes; the model row of that table is the one still empty.
 - **Risk-flag recall is 0.54 at the spec-pinned threshold of 60**, because single-anomaly
   applications score 40–50. The threshold is fixed by SPEC §7, so it was not tuned to flatter the
   metric. Per-check fail-flag precision and recall are both 1.00 — that is what the gate measures.
@@ -112,7 +128,8 @@ Latency at three levels, because the honest answer depends on which one is being
 | precision/recall 1.00, recall 0.54, 0.11 ms | `python -m eval.runner` → `eval/reports/<ts>/report.md`; `python -m eval.gate` |
 | p50 3.0 ms live | `python -m pipeline.scripts.bench_scrutiny --base-url http://127.0.0.1:8123 --sample 20 --repeat 5` |
 | 200 apps / 917 docs / 50 anomalies / seed 42 | `python -m generator --n 200 --anomaly-rate 0.25 --seed 42` (SPEC §6) |
-| 247 + 17 tests, ruff clean | `ruff check .` + `pytest -q` in `services/pipeline` and `eval` |
+| 247 + 32 tests, ruff clean | `ruff check .` + `pytest -q` in `services/pipeline` and `eval` |
+| read-back control (124/124, 20 of 20) | `python -m eval.image_leg --reader text` → `eval/reports/image-leg/<ts>/image_leg.md` |
 | 666 ms stand-in leg | `docs/track-a/live-model-leg.md`, verified with `eval.runner --limit 2` against a local fake |
 | demo beats and payloads | `docs/track-a/i4-demo-rehearsal.md` (two passes, same store recipe) |
 

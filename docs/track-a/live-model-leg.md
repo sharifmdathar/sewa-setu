@@ -28,6 +28,7 @@ or to measure what a model actually reads back.
 | Response cache | `pipeline/llmcache.py` | One file per request under `var/llm-cache`, keyed by model + full message list + JSON mode. A crashed run resumes instead of re-spending a daily quota. Corrupt or unwritable entries read as a miss. |
 | Preflight probe | `pipeline/scripts/probe_llm.py` | Answers "is this model usable, and does it do JSON mode and images?" for one call each, before a batch run finds out the expensive way. |
 | Image leg | `data/synthetic/generator/render.py` | `--png N` renders N documents into `docs_img/` with `image_manifest.json` carrying the fields a correct read must return. |
+| Read-back scorer | `eval/image_leg.py`, `eval/image_leg_md.py` | Compares a read against that manifest: field recall **and** precision, whole-document clean reads, per-field and per-type breakdowns. `--reader text` runs the same documents through the deterministic parser as a control that should score 1.00. |
 | Provenance | `eval/runner.py`, `eval/report_md.py` | The report says which extractor, adjudicator, model and cache state produced it, and titles itself `rules-only` or `live model leg`. |
 
 The attempt budget is unchanged at `max_retries + 1` calls per document; falling back out of
@@ -53,14 +54,18 @@ python -m generator --n 200 --anomaly-rate 0.25 --seed 42 \
     --out data/synthetic/dataset-v1 --png 20
 
 # 2. probe the candidate models — 1-2 calls each, cache disabled for probes
-export LLM_BASE_URL=... LLM_API_KEY=... 
+export LLM_BASE_URL=... LLM_API_KEY=...
 python -m pipeline.scripts.probe_llm --model google/gemma-3-12b-it --model qwen/qwen3.8-27b:free \
     --image data/synthetic/dataset-v1/docs_img/APP-0001-aadhaar-1.png
 
-# 3. the small image leg first (20 documents, ~20 calls)
+# 3. read-back accuracy: the control first (it needs no key), then the model over the same 20 PNGs
+python -m eval.image_leg --reader text
+LLM_MODEL=<winner> python -m eval.image_leg
+
+# 4. then the whole-application live pass on a small sample (~20 calls)
 LLM_MODEL=<winner> python -m eval.runner --limit 20
 
-# 4. only then decide about a bigger text-corpus pass; the cache makes a re-run free
+# 5. only then decide about a bigger text-corpus pass; the cache makes a re-run free
 LLM_MODEL=<winner> python -m eval.runner --limit 60
 ```
 
@@ -77,16 +82,18 @@ a genuinely cold measurement.
   "12–18 min → < 60 s" claim in SPEC §2.
 - **Precision will move.** Misread fields surface as C1/C3/C4 verdicts, so the live table is
   expected to be worse than 1.00/1.00. That is the point of measuring it; report it as found.
-- **`docs_img/` is rendered text, not a scan.** It proves the base64 data-URI path and measures
-  read-back accuracy. It says nothing about skew, glare or low-DPI robustness, and the submission
-  must not claim otherwise.
+- **`docs_img/` is rendered text, not a scan.** `eval.image_leg` scores it against the manifest's
+  expected fields, which is a real read-back measurement — but on clean rendered type. It says
+  nothing about skew, glare or low-DPI robustness, and the submission must not claim otherwise.
+- **Read the control before quoting the model number.** `--reader text` scores the same 20
+  documents through the deterministic parser. If the control is not 1.00, the manifest and the
+  reader disagree and the model's score is measuring the harness, not the model.
 - **Risk-flag recall stays ~0.54** at the spec-pinned `riskScore >= 60` on both legs; the queue
   ranks, it does not catch. Quote the fail-flag table as the gate and disclose this next to it.
 
-## Verified in this session, with a local stand-in endpoint
+## Verified without a key
 
-No API key existed, so the live path was exercised against a throwaway OpenAI-compatible server
-that 429s its first request and returns fixed JSON:
+Against a throwaway OpenAI-compatible server that 429s its first request and returns fixed JSON:
 
 - `eval.runner --limit 2` with the key set: `path : llm-vlm + llm-adjudicator (fake-vlm-1)`,
   `11 new, 0 served from cache`, server-side count **12** requests for 11 successful calls —
@@ -97,5 +104,14 @@ that 429s its first request and returns fixed JSON:
 - Mean per-application time moved from 0.11 ms (rules-only) to 666 ms (live), and the report
   titled itself `live model leg` in the second case.
 
-What that does **not** cover: a real model's answer quality. The plumbing is proven; the numbers
-from a real endpoint are still to be produced.
+Against the real corpus, no endpoint at all (`python -m eval.image_leg --reader text`, 2026-09-27):
+
+- **124 of 124 stated field values read correctly, 20 of 20 documents read completely**, across
+  all ten document types — so `image_manifest.json`'s ground truth and the pipeline's own reader
+  agree, which is what makes the model's future score interpretable.
+- `--reader model` with no key exits 2 with the command that fixes it, rather than scoring pixels
+  with a text parser and reporting zero.
+
+What none of that covers: a real model's answer quality. The plumbing and the yardstick are both
+proven; the numbers from a real endpoint are still to be produced.
+
