@@ -13,7 +13,7 @@ import pytest
 from pipeline.api.repository import latest_eval_metrics
 from pipeline.rules import load_rule_config
 
-from eval.dataset import DEFAULT_DATASET, load
+from eval.dataset import CHECKS, DEFAULT_DATASET, load
 from eval.gate import BREACH_EXIT, MISSING_EXIT, latest_report, violations
 from eval.gate import main as gate_main
 from eval.metrics import Tally, tally, total
@@ -32,8 +32,19 @@ STAMP = "2026-09-26T09-30-00"
 def report_payload(precision: float = 0.95, recall: float = 0.9) -> dict[str, object]:
     return {
         "generatedAt": "2026-09-26T09:30:00+00:00",
-        "dataset": {"applications": 200, "seed": 42, "asOf": "2026-06-30"},
-        "thresholds": {"flagRiskScore": 60, "latencyTargetSeconds": 60},
+        "dataset": {
+            "applications": 200,
+            "seed": 42,
+            "asOf": "2026-06-30",
+            "documents": 917,
+            "anomalous": 50,
+        },
+        "thresholds": {
+            "flagRiskScore": 60,
+            "latencyTargetSeconds": 60,
+            "precisionTarget": 0.90,
+            "recallTarget": 0.85,
+        },
         "latency": {
             "meanSecondsPerApplication": 0.0002,
             "meanMillisecondsPerApplication": 0.2,
@@ -50,6 +61,7 @@ def report_payload(precision: float = 0.95, recall: float = 0.9) -> dict[str, ob
             "recall": recall,
             "f1": 0.92,
         },
+        "misses": [],
         "riskFlags": {
             "precision": 1.0,
             "recall": 0.54,
@@ -59,7 +71,20 @@ def report_payload(precision: float = 0.95, recall: float = 0.9) -> dict[str, ob
             "truePositive": 27,
             "falsePositive": 0,
         },
-        "checks": {},
+        "checks": {
+            check: {
+                "support": 0,
+                "predicted": 0,
+                "truePositive": 0,
+                "falsePositive": 0,
+                "falseNegative": 0,
+                "precision": precision,
+                "recall": recall,
+                "f1": round(2 * precision * recall / (precision + recall), 4),
+                "accuracy": 1.0,
+            }
+            for check in CHECKS
+        },
         "evalPrecision": precision,
         "evalRecall": recall,
     }
@@ -112,6 +137,53 @@ def write_run(directory: Path, payload: dict[str, object], stamp: str = STAMP) -
     target.mkdir(parents=True, exist_ok=True)
     (target / "report.json").write_text(json.dumps(payload), encoding="utf-8")
     return target
+
+
+def test_the_gate_judges_the_report_the_dashboard_quotes(tmp_path: Path) -> None:
+    """One notion of "newest", shared with /metrics/summary.
+
+    If the two ever pick differently, `eval.gate` can pass on one run while the dashboard
+    quotes another - the kind of disagreement a demo never notices.
+    """
+    from pipeline.api.repository import newest_eval_report
+
+    from eval.gate import latest_report
+
+    write_run(tmp_path, report_payload(precision=0.10, recall=0.10), stamp="2026-09-26T09-30-00")
+    newest = write_run(
+        tmp_path, report_payload(precision=0.99, recall=0.99), stamp="zz-hand-copied"
+    )
+    expected = newest / "report.json"
+    expected.write_text(
+        json.dumps({**report_payload(), "generatedAt": "2099-01-01T00:00:00+00:00"}),
+        encoding="utf-8",
+    )
+
+    assert latest_report(tmp_path) == expected
+    assert newest_eval_report(tmp_path) == expected
+
+
+def test_the_markdown_states_the_verdict_and_how_to_reproduce(payload: dict[str, object]) -> None:
+    from eval.runner import render_markdown
+
+    markdown = render_markdown(payload)
+
+    assert "**PASS**" in markdown
+    assert "## Gate" in markdown and "## How to reproduce" in markdown
+    assert "python -m eval.gate" in markdown
+    assert "no model calls" in markdown  # the caveat travels with the numbers
+
+
+def test_the_markdown_reports_a_breach_as_a_breach(tmp_path: Path) -> None:
+    from eval.runner import render_markdown
+
+    failing = report_payload(precision=0.80, recall=0.80)
+
+    assert violations(failing) != []
+    markdown = render_markdown(failing)
+    assert "**FAIL**" in markdown
+    assert "0.800 < 0.90" in markdown and "0.800 < 0.85" in markdown
+    assert "| Fail-flag precision | unmeasured | 0.80 (NOT met)" in markdown
 
 
 def test_the_gate_exits_on_the_newest_report_only(
@@ -178,7 +250,7 @@ def test_the_full_corpus_pass_clears_the_gate(payload: dict[str, object]) -> Non
 def test_the_markdown_is_quotable_and_matches_the_json(payload: dict[str, object]) -> None:
     markdown = render_markdown(payload)
 
-    assert "| Fail-flag precision | unmeasured | 1.00 | >= 0.90 |" in markdown
+    assert "| Fail-flag precision | unmeasured | 1.00 (met) | >= 0.90 |" in markdown
     assert "| C5 | 21 | 21 | 21 | 0 | 0 | 1.00 | 1.00 | 1.00 |" in markdown
     assert "Measured offline" in markdown  # the latency caveat must travel with the number
     for check in ("C1", "C2", "C3", "C4", "C5"):

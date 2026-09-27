@@ -14,16 +14,26 @@ import json
 from pathlib import Path
 from typing import Any
 
+from pipeline.api.repository import newest_eval_report
+
 from eval.runner import DEFAULT_OUT, PRECISION_TARGET, RECALL_TARGET
 
 MISSING_EXIT = 2
 BREACH_EXIT = 1
 
 
+def _stamp(raw: str) -> str:
+    """The report's own instant, as readable as the markdown renders it."""
+    return str(raw)[:19].replace("T", " ") + " UTC"
+
+
 def latest_report(reports_dir: Path) -> Path | None:
-    """The newest `reports/<timestamp>/report.json`; the stamp sorts lexicographically."""
-    candidates = sorted(reports_dir.glob("*/report.json"))
-    return candidates[-1] if candidates else None
+    """The newest report - delegated to the same selection `/metrics/summary` uses.
+
+    Two notions of "newest" would let the gate pass on one run while the dashboard quoted
+    another, which is precisely the disagreement a demo never notices.
+    """
+    return newest_eval_report(reports_dir)
 
 
 def violations(payload: dict[str, Any]) -> list[str]:
@@ -45,7 +55,8 @@ def describe(payload: dict[str, Any]) -> list[str]:
     risk = payload["riskFlags"]
     latency = payload["latency"]
     return [
-        f"report      : generated {payload['generatedAt']} over "
+        "report      : "
+        f"{_stamp(payload['generatedAt'])} - "
         f"{payload['dataset']['applications']} applications",
         f"fail flags  : precision {flags['precision']:.3f} "
         f"(>= {PRECISION_TARGET:.2f}), recall {flags['recall']:.3f} "

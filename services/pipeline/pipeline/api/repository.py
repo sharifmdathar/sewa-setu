@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from pipeline.agent import ScrutinyReport
 from pipeline.api import catalog
 from pipeline.extraction import DocumentContent
 from pipeline.ingestion import stored_document, to_content
+from pipeline.logs import get_logger, warning
 from pipeline.rules import ScrutinyInput
 from pipeline.store.jsonstore import JsonStore
 
@@ -33,6 +35,11 @@ OPEN_STATUSES = (
     "info_requested",
 )
 EVAL_REPORTS_DIR = Path(__file__).resolve().parents[4] / "eval" / "reports"
+LOGGER = get_logger("api.repository")
+# How `eval/runner.py` names its output directory; used only as a fallback clock.
+EVAL_STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})$")
+EVAL_STAMP_FORMAT = "%Y-%m-%dT%H-%M-%S"
+EVAL_KEYS = ("evalPrecision", "evalRecall")
 
 
 def now() -> dt.datetime:
@@ -279,24 +286,77 @@ class Repository:
         return summary
 
 
-def latest_eval_metrics(directory: Path | None = None) -> dict[str, float]:
-    """evalPrecision / evalRecall from the newest `eval/reports/<ts>/report.json`, if A8 ran.
+def _report_clock(report: Path) -> tuple[dt.datetime, str]:
+    """When this run happened: its own `generatedAt`, else its timestamp-shaped dir name.
 
-    Silent when absent: those two fields are optional on MetricsSummary, and reading eval
-    output must never break the metrics endpoint.
+    Sorting the directory names alone looked right while every run was produced by the runner,
+    and went wrong the moment a report was copied or renamed by hand - the dashboard then
+    served an older run and looked healthy.
     """
-    root = directory or EVAL_REPORTS_DIR
-    reports = sorted(root.glob("*/report.json")) if root.is_dir() else []
-    if not reports:
+    epoch = dt.datetime.fromtimestamp(0, dt.UTC)
+    try:
+        payload = json.loads(report.read_text(encoding="utf-8"))
+        stamp = payload.get("generatedAt") if isinstance(payload, dict) else None
+        if isinstance(stamp, str):
+            return dt.datetime.fromisoformat(stamp.replace("Z", "+00:00")), report.parent.name
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+    named = EVAL_STAMP.match(report.parent.name)
+    if named:
+        try:
+            moment = dt.datetime.strptime(named.group(1), EVAL_STAMP_FORMAT).replace(tzinfo=dt.UTC)
+            return moment, report.parent.name
+        except ValueError:
+            pass
+    return epoch, report.parent.name
+
+
+def newest_eval_report(reports_dir: Path = EVAL_REPORTS_DIR) -> Path | None:
+    """The report `eval/gate.py` should judge and `/metrics/summary` should quote - one answer.
+
+    Shared on purpose: a gate that passes on run X while the dashboard quotes run Y is the
+    worst kind of wrong, and it is invisible in a demo.
+    """
+    if not reports_dir.is_dir():
+        return None
+    candidates = list(reports_dir.glob("*/report.json"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda report: (_report_clock(report), str(report)))
+
+
+def latest_eval_metrics(directory: Path | None = None) -> dict[str, float]:
+    """evalPrecision / evalRecall from the newest eval report, if one ran and said both.
+
+    Absent is better than wrong: the two fields are optional on MetricsSummary, so a missing or
+    malformed eval output drops them and the dashboard falls back, rather than inventing a
+    number. A dropped value is logged, because "no eval numbers" and "eval numbers we could not
+    read" look identical from the outside and are not the same problem.
+    """
+    report = newest_eval_report(Path(directory) if directory is not None else EVAL_REPORTS_DIR)
+    if report is None:
         return {}
     try:
-        payload = json.loads(reports[-1].read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        payload = json.loads(report.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        warning(LOGGER, "eval report unreadable", path=str(report), reason=str(exc))
         return {}
     if not isinstance(payload, dict):
+        warning(LOGGER, "eval report is not an object", path=str(report))
         return {}
-    return {
+
+    numbers = {
         key: float(payload[key])
-        for key in ("evalPrecision", "evalRecall")
-        if isinstance(payload.get(key), (int, float))
+        for key in EVAL_KEYS
+        if isinstance(payload.get(key), (int, float)) and not isinstance(payload.get(key), bool)
     }
+    missing = [key for key in EVAL_KEYS if key not in numbers]
+    if missing:
+        warning(
+            LOGGER,
+            "eval report lacks usable numbers",
+            path=str(report),
+            missing=missing,
+            seen=[key for key in EVAL_KEYS if key in payload],
+        )
+    return numbers

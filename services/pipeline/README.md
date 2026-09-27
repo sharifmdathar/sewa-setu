@@ -161,8 +161,15 @@ python -m eval.runner           # writes eval/reports/<timestamp>/{report.json,r
 python -m eval.gate; echo $?    # 0 = PASS, 1 = threshold breach, 2 = no report yet
 ```
 
-`report.md` is the file the submission quotes. Current result on dataset-v1: fail-flag precision
-1.00 / recall 1.00 (gate targets 0.90 / 0.85), mean ~0.1 ms per application offline.
+`report.md` is the file the submission quotes, and it states the gate verdict itself rather than
+leaving the table to be interpreted. Current result on dataset-v1: fail-flag precision 1.00 /
+recall 1.00 (targets 0.90 / 0.85), mean ~0.1 ms per application offline.
+
+`GET /metrics/summary` reads `evalPrecision` / `evalRecall` from the newest
+`eval/reports/<ts>/report.json` - the same newest-run rule `eval.gate` uses, so the dashboard and
+the gate can never quote different runs - and omits both keys when no eval has run or the numbers
+are unreadable (they are optional on the contract, and absent beats wrong). Nothing about them is
+hardcoded: replace the newest report's numbers and the endpoint answers differently.
 
 ## 10. Where things live, and how to reset
 
