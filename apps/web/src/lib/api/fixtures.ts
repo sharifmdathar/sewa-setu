@@ -87,6 +87,10 @@ export function seedStore(): MockStore {
     },
   ];
 
+  // B8 demo seed — dataset-v1 shapes (SPEC.md §6): clean apps score < 30,
+  // anomalous apps carry planted-anomaly labels (field_mismatch,
+  // duplicate_hash, expired_doc, missing_doc) and risk >= 60 (flag threshold).
+  // Dates span 4 days so the dashboard's "apps by day" chart has shape.
   const applications: Application[] = [
     {
       id: "app-1001", serviceId: "svc-income-cert", status: "scrutiny_done",
@@ -101,11 +105,14 @@ export function seedStore(): MockStore {
     {
       id: "app-1002", serviceId: "svc-caste-cert", status: "scrutiny_done",
       applicantFields: { applicantName: "Bikash Thapa", caste: "Thapa", motherName: "Sita Thapa", address: "9 Hill Road, Ward 7" },
-      createdAt: "2026-09-19T11:30:00Z", updatedAt: "2026-09-20T10:09:00Z",
+      createdAt: "2026-09-19T11:30:00Z", updatedAt: "2026-09-22T10:09:00Z",
       timeline: [
         { at: "2026-09-19T11:30:00Z", actor: "citizen", event: "application_created", message: "Application submitted for Caste Certificate." },
         { at: "2026-09-19T11:41:00Z", actor: "citizen", event: "documents_uploaded", message: "Uploaded id_proof and residence." },
         { at: "2026-09-20T10:09:00Z", actor: "system", event: "scrutiny_done", message: "Scrutiny complete. Risk score 74, recommendation: manual_review." },
+        { at: "2026-09-22T10:09:00Z", actor: "officer", event: "decision_request_info", message: "Officer asked the applicant to confirm the address on the residence document." },
+        { at: "2026-09-22T11:02:00Z", actor: "citizen", event: "documents_uploaded", message: "Re-uploaded residence with current address." },
+        { at: "2026-09-22T11:40:00Z", actor: "officer", event: "decision_request_info", message: "Officer re-requested info pending re-scrutiny." },
       ],
     },
     {
@@ -139,6 +146,26 @@ export function seedStore(): MockStore {
         { at: "2026-09-20T10:02:00Z", actor: "citizen", event: "documents_uploaded", message: "Uploaded id_proof and residence." },
       ],
     },
+    {
+      id: "app-1006", serviceId: "svc-income-cert", status: "scrutiny_done",
+      applicantFields: { applicantName: "Fenisha Lama", dob: "1988-07-30", monthlyIncome: 21000, address: "2 Lakeview, Ward 4" },
+      createdAt: "2026-09-21T09:20:00Z", updatedAt: "2026-09-21T10:15:00Z",
+      timeline: [
+        { at: "2026-09-21T09:20:00Z", actor: "citizen", event: "application_created", message: "Application submitted for Income Certificate." },
+        { at: "2026-09-21T09:35:00Z", actor: "citizen", event: "documents_uploaded", message: "Uploaded id_proof and income_proof." },
+        { at: "2026-09-21T10:15:00Z", actor: "system", event: "scrutiny_done", message: "Scrutiny complete. Risk score 68, recommendation: manual_review." },
+      ],
+    },
+    {
+      id: "app-1007", serviceId: "svc-caste-cert", status: "scrutiny_done",
+      applicantFields: { applicantName: "Ganesh Bhattrai", caste: "Bhattrai", motherName: "Laxmi Bhattrai", address: "5 Temple Street, Ward 1" },
+      createdAt: "2026-09-22T08:40:00Z", updatedAt: "2026-09-22T09:10:00Z",
+      timeline: [
+        { at: "2026-09-22T08:40:00Z", actor: "citizen", event: "application_created", message: "Application submitted for Caste Certificate." },
+        { at: "2026-09-22T08:55:00Z", actor: "citizen", event: "documents_uploaded", message: "Uploaded id_proof and residence." },
+        { at: "2026-09-22T09:10:00Z", actor: "system", event: "scrutiny_done", message: "Scrutiny complete. Risk score 21, recommendation: approve." },
+      ],
+    },
   ];
 
   const documentsByApp: Record<string, Document[]> = {
@@ -161,29 +188,51 @@ export function seedStore(): MockStore {
       { id: "doc-108", docType: "id_proof", fileName: "aadhaar-eisha.txt", uploadedAt: "2026-09-20T10:00:00Z", sha256: "mock-sha-0108" },
       { id: "doc-109", docType: "residence", fileName: "residence-eisha.txt", uploadedAt: "2026-09-20T10:02:00Z", sha256: "mock-sha-0104" },
     ],
+    "app-1006": [
+      { id: "doc-110", docType: "id_proof", fileName: "aadhaar-fenisha.txt", uploadedAt: "2026-09-21T09:30:00Z", sha256: "mock-sha-0110" },
+      { id: "doc-111", docType: "income_proof", fileName: "income-fenisha.txt", uploadedAt: "2026-09-21T09:35:00Z", sha256: "mock-sha-0111" },
+    ],
+    "app-1007": [
+      { id: "doc-112", docType: "id_proof", fileName: "aadhaar-ganesh.txt", uploadedAt: "2026-09-22T08:52:00Z", sha256: "mock-sha-0112" },
+      { id: "doc-113", docType: "residence", fileName: "residence-ganesh.txt", uploadedAt: "2026-09-22T08:55:00Z", sha256: "mock-sha-0113" },
+    ],
   };
 
   const reportsByApp: Record<string, ScrutinyReport> = {
+    // clean (risk < 30, all checks pass)
     "app-1001": report("app-1001", 12, "approve", checks(), { applicantName: "Asha Rai", monthlyIncome: 8400 }),
+    // anomalous: field_mismatch + duplicate_hash (planted-anomaly labels from SPEC §6)
     "app-1002": report(
       "app-1002", 74, "manual_review",
       checks({
-        C4: { checkId: "C4", label: CHECK_LABELS.C4, status: "fail", severity: "high", evidence: "Declared address '9 Hill Road, Ward 7' vs residence doc address '44 Lakeside, Ward 9' — mismatch.", explanation: "The address you filled in does not match the uploaded residence document." },
-        C5: { checkId: "C5", label: CHECK_LABELS.C5, status: "fail", severity: "high", evidence: "Document sha256 mock-sha-0104 already used by app-1005 (duplicate hash).", explanation: "The same residence document file appears in two different applications." },
+        C4: { checkId: "C4", label: CHECK_LABELS.C4, status: "fail", severity: "high", evidence: "[field_mismatch] Declared address '9 Hill Road, Ward 7' vs residence doc address '44 Lakeside, Ward 9' — mismatch.", explanation: "The address you filled in does not match the uploaded residence document." },
+        C5: { checkId: "C5", label: CHECK_LABELS.C5, status: "fail", severity: "high", evidence: "[duplicate_hash] Document sha256 mock-sha-0104 already used by app-1005 (duplicate hash).", explanation: "The same residence document file appears in two different applications." },
       }),
       { applicantName: "Bikash Thapa", address: "44 Lakeside, Ward 9" },
     ),
     "app-1003": report("app-1003", 8, "approve", checks(), { applicantName: "Chandra Maharjan", yearsAtAddress: 12 }),
+    // info_requested: missing_doc (risk just below the 60 flag line)
     "app-1004": report(
       "app-1004", 55, "request_info",
       checks({
-        C3: { checkId: "C3", label: CHECK_LABELS.C3, status: "fail", severity: "medium", evidence: "Required docTypes ['id_proof','income_proof']; only ['id_proof'] uploaded.", explanation: "A required document (income proof) is missing from this application." },
+        C3: { checkId: "C3", label: CHECK_LABELS.C3, status: "fail", severity: "medium", evidence: "[missing_doc] Required docTypes ['id_proof','income_proof']; only ['id_proof'] uploaded.", explanation: "A required document (income proof) is missing from this application." },
       }),
       { applicantName: "Dipesh Gurung", monthlyIncome: 15000 },
     ),
+    // anomalous: expired_doc + tampered_number
+    "app-1006": report(
+      "app-1006", 68, "manual_review",
+      checks({
+        C2: { checkId: "C2", label: CHECK_LABELS.C2, status: "fail", severity: "high", evidence: "[expired_doc] Income certificate issued 2023-06-01, expired 2025-06-01 — 1 year past validity at submission.", explanation: "The uploaded income certificate had already expired when the application was made." },
+        C4: { checkId: "C4", label: CHECK_LABELS.C4, status: "fail", severity: "medium", evidence: "[tampered_number] Declared income Rs 21,000 vs document Rs 2,100 — digit spacing inconsistent with the template.", explanation: "The income figure in the document looks altered compared to what was declared." },
+      }),
+      { applicantName: "Fenisha Lama", monthlyIncome: 21000 },
+    ),
+    // clean
+    "app-1007": report("app-1007", 21, "approve", checks(), { applicantName: "Ganesh Bhattrai", caste: "Bhattrai" }),
   };
 
-  return { services, applications, documentsByApp, reportsByApp, scrutinyDurationsMs: [4200, 5100, 3900, 4700], seq: 1006 };
+  return { services, applications, documentsByApp, reportsByApp, scrutinyDurationsMs: [4200, 5100, 3900, 4700, 4400, 4000], seq: 1008 };
 }
 
 /** Build QueueItems from the store: everything not yet decided, risk desc. */
