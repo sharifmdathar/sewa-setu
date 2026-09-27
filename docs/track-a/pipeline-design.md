@@ -14,7 +14,7 @@ Written at the end of A9. Prompts A1–A9 are committed on `track-a`; this is th
 | `pipeline/agent/adjudicator.py` | `DeterministicAdjudicator`, `LLMAdjudicator` | settles `warn`/`info` checks into a final status plus officer-facing wording |
 | `pipeline/fraud/` | `score_fraud(data, checks, config)` | five mechanical features → `riskScore` (0–100), recommendation, flagged, and the internal signal list |
 | `pipeline/store/` | `JsonStore` | one JSON file per record, atomic replace, process-wide lock |
-| `pipeline/api/` | `create_app(store_root)` | the nine contract paths, service catalog, application state machine, queue, metrics |
+| `pipeline/api/` | `create_app(store_root)` | the ten contract paths, service catalog, application state machine, queue, metrics |
 | `pipeline/api/evalfeed.py` | `newest_eval_report`, `latest_eval_metrics` | reads the harness's newest `report.json` once, shared by `/metrics/summary` and `eval.gate` |
 | `pipeline/logs.py` | `configure`, `event`, `warning` | one JSON object per line, context-carrying |
 | `eval/` | `python -m eval.runner`, `python -m eval.gate` | offline pass over dataset-v1 vs ground truth, `report.{json,md}`, SPEC threshold gate |
@@ -148,15 +148,25 @@ improving recall means richer scoring (A6 follow-up), not moving the goal posts.
   worker, or move to a real database (out of POC scope).
 - **Auth**: none, by design (SPEC §3 — production auth is out, the demo uses a role switcher).
   Every path is unauthenticated; do not expose this port.
-- **M4 is under way (paired session, 2026-09-27).** `m4-pre-contract` marks the pre-apply state
-  (`git reset --hard m4-pre-contract` rolls the whole thing back). CR-2 and CR-3 are applied:
-  `queue()` returns every status with `open_count()` as the one definition of "open", and
-  `MetricsSummary` gained the two chart series. CR-1 (documents GET) follows. `shared/contracts/openapi.yaml` is byte-identical to the scaffold
-  freeze (verified `git log -1 -- shared/contracts/openapi.yaml`). The CR-1/2/3 hunks are recorded
-  and pre-validated, but editing the contract needs the paired session - and while only one track
-  is present, a policy guard blocks the edit outright, so this is not something a lone agent can
-  land by trying harder.
-- **CR-1** open: no contract path lists an application's documents.
+- **M4 landed (2026-09-27).** All three CRs are in. `shared/contracts/openapi.yaml` came from
+  Track B's push (`5f28901`) and is now *theirs*: under M4 option A the contract and the dashboard
+  are Track B's, Track A's landings are code-only, and `git diff origin/main..HEAD` over
+  `shared/contracts/` is empty by design. Rebased local CR commits had re-added Track B's
+  `MetricsSummary` block a second time — duplicate YAML keys that `safe_load` hides by keeping the
+  last copy — so commit `take Track B's contract verbatim` restored their file. What Track A
+  landed:
+  - **CR-2** `queue()` returns every application with its `status` and `riskScore` (unscored = 0),
+    and `metrics.pending` / `metrics.decided` both derive from `open_count()` over
+    `OPEN_STATUSES`, so queue and cards can no longer disagree.
+  - **CR-3** `applicationsByDay` (buckets of `createdAt`, oldest first) and `riskDistribution`
+    (`<30 / 30–59 / >=60`, scrutinized applications only, same denominator as `flagRate`). Each is
+    **absent when it has nothing to plot** — an empty array would draw a blank chart where "no data
+    yet" is the truth; once any application is scored all three bands appear, so the axis is stable
+    at zero as well as at three.
+  - **CR-1** `GET /applications/{id}/documents` → `Document[]` in upload order, no bytes on the
+    wire, judged by the live conformance suite and the coverage guard.
+- **Track B's half of M4 is still open**: `types.ts` must declare the two series optional and the
+  dashboard must read its charts from `getMetrics` rather than bucketing `getQueue`.
 - **I2 seed**: `tests/corpus.py` and `eval/dataset.py` both read dataset-v1 into pipeline shapes;
   the seeding step can reuse either, but application ids from the corpus are what the store will
   hold, so keep them (`Repository.create` mints its own ids for new submissions).

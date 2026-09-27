@@ -118,6 +118,24 @@ def test_documents_upload_response_and_404(live: httpx.Client) -> None:
     assert missing.status_code == 404
 
 
+def test_documents_listing_matches_its_path_schema(
+    live: httpx.Client, scrutinized: dict[str, object]
+) -> None:
+    """CR-1 live: the GET the contract now declares, judged by the contract itself."""
+    app_id = str(scrutinized["applicationId"])
+
+    response = live.get(f"/applications/{app_id}/documents")
+    missing = live.get("/applications/APP-NOT-HERE/documents")
+
+    assert response.status_code == 200
+    assert_valid_response(response.json(), "get", "/applications/{id}/documents", "200")
+    assert [document["docType"] for document in response.json()] == [
+        doc_type for doc_type, _, _ in DOC_TYPES
+    ]
+    assert all("contentBase64" not in document for document in response.json())
+    assert missing.status_code == 404
+
+
 def test_scrutiny_run_returns_a_full_contract_report(
     live: httpx.Client, scrutinized: dict[str, object]
 ) -> None:
@@ -208,6 +226,31 @@ def test_officer_decision_matches_its_inline_schema(
     assert_valid_response(response.json(), "post", "/officer/decisions", "200")
     assert response.json() == {"applicationId": app_id, "status": "decided"}
     assert missing.status_code == 404
+
+
+def test_queue_lists_applications_that_have_not_been_scrutinized_yet(
+    live: httpx.Client,
+) -> None:
+    """CR-2 live: the queue is the officer's whole workload, not only the scored part of it."""
+    app_id = str(
+        live.post(
+            "/applications", json={"serviceId": "income_certificate", "applicantFields": APPLICANT}
+        ).json()["id"]
+    )
+
+    items = live.get("/officer/queue").json()
+
+    assert_valid_response(items, "get", "/officer/queue", "200")
+    fresh = [item for item in items if item["applicationId"] == app_id]
+    assert fresh == [
+        {
+            "applicationId": app_id,
+            "serviceId": "income_certificate",
+            "status": "submitted",
+            "riskScore": 0,
+            "updatedAt": fresh[0]["updatedAt"],
+        }
+    ]
 
 
 def test_metrics_summary_matches_its_schema(live: httpx.Client) -> None:

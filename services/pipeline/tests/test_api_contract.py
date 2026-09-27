@@ -199,11 +199,40 @@ def test_the_report_survives_the_store_roundtrip(client: TestClient) -> None:
     ]
 
 
+def test_listing_documents_returns_what_was_filed_in_upload_order(client: TestClient) -> None:
+    """CR-1: GET on the same path the citizen uploads to, so the officer sees the filing."""
+    application_id = complete_application(client)
+
+    response = client.get(f"/applications/{application_id}/documents")
+    payload = response.json()
+
+    assert response.status_code == 200
+    for document in payload:
+        assert_valid(document, "Document")
+    assert [document["fileName"] for document in payload] == [
+        file_name for _, file_name, _ in REQUIRED_FOR_INCOME
+    ]
+    assert [document["docType"] for document in payload] == [
+        doc_type for doc_type, _, _ in REQUIRED_FOR_INCOME
+    ]
+    assert all("contentBase64" not in document for document in payload)
+
+
+def test_an_unfiled_application_lists_no_documents(client: TestClient) -> None:
+    application_id = new_application(client)
+
+    response = client.get(f"/applications/{application_id}/documents")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [
         ("get", "/applications/APP-NOPE"),
         ("post", "/applications/APP-NOPE/documents"),
+        ("get", "/applications/APP-NOPE/documents"),
         ("post", "/applications/APP-NOPE/scrutiny/run"),
         ("get", "/applications/APP-NOPE/scrutiny"),
         ("post", "/officer/decisions"),

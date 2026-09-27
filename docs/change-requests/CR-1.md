@@ -88,3 +88,24 @@ Track B one method instead of a type change.
 - **Insertion caveat:** the `get:` goes *inside* the existing `/applications/{id}/documents:`
   mapping, after its `post:` — a second top-level `/applications/{id}/documents:` key would be
   invalid YAML.
+
+---
+
+## Applied — M4 paired session (2026-09-27), under option A
+
+Track B landed the `get:` block above in `shared/contracts/openapi.yaml` with their own push
+(`5f28901`, which also carried CR-2 and CR-3); Track A's landing is code-only, in
+`services/pipeline/**`. Option A was chosen precisely so the contract has one author per session.
+
+- **Route:** `GET /applications/{application_id}/documents` → `list[Document]`, built from
+  `record["documents"]` through the existing `document_view`, so upload order is the stored order
+  and the bytes never leave the process. Unknown id → 404 via `require_record`.
+- **The guard's obligation, discharged:** `COVERED` in `tests/test_contract_paths.py` declares the
+  pair, `test_api_contract.py` pins upload order / the empty list for an unfiled application /
+  absence of `contentBase64`, and `test_api_live_contract.py` judges the real HTTP response
+  against the schema the contract itself declares (plus the 404).
+- **Verified live** on the demo store: `GET /applications/APP-0001/documents` returned 4 documents
+  carrying only `id`, `docType`, `fileName`, `uploadedAt`, `sha256`; `/applications/APP-NOT-HERE/documents`
+  returned 404.
+- **Still Track B's:** `listDocuments(applicationId)` on `ApiClient` + a `documents` fixture per
+  mock application, and the officer evidence panel.

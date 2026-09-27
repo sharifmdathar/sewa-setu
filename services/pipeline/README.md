@@ -86,8 +86,10 @@ curl -s localhost:8000/officer/queue
 curl -s localhost:8000/metrics/summary
 ```
 
-A fresh store answers `/officer/queue` with `[]` - the queue only lists applications that have
-been scrutinized. To fill it without clicking through the citizen UI, seed it (§12).
+A fresh store answers `/officer/queue` with `[]` - the queue lists every application, so an empty
+response means an empty store, not unscored work (CR-2). An application that has not been
+scrutinized yet is in it with `riskScore` 0. To fill the store without clicking through the
+citizen UI, seed it (§12).
 
 ## 6. One scrutiny, end to end
 
@@ -102,6 +104,7 @@ APP=$(curl -s -X POST localhost:8000/applications \
 curl -s -X POST "localhost:8000/applications/$APP/documents" -H 'content-type: application/json' \
   -d "{\"docType\":\"aadhaar\",\"fileName\":\"aadhaar.txt\",\"contentBase64\":\"$DOC_B64\"}"
 
+curl -s "localhost:8000/applications/$APP/documents"
 curl -s -X POST "localhost:8000/applications/$APP/scrutiny/run" | python -m json.tool
 curl -s localhost:8000/officer/queue
 curl -s -X POST localhost:8000/officer/decisions -H 'content-type: application/json' \
@@ -203,7 +206,8 @@ rm -rf services/pipeline/var eval/reports data/synthetic/dataset-v1
 - **Two tracebacks per request in tests** — pytest was run from the repository root (§4).
 - **A contract test fails on an unexpected key** — the response grew a field the frozen contract
   does not declare. Fix the model, not the contract; if the contract is genuinely short a path,
-  see `docs/change-requests/CR-1.md` for the pattern.
+  draft `docs/change-requests/CR-<n>.md` and land it in a paired session (CR-1 is the worked
+  example: Track A proposes and implements, Track B edits the contract).
 
 ## 12. Demo seed (integration step I2)
 

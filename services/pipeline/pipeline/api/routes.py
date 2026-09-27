@@ -109,6 +109,13 @@ def upload_document(
     return document_view(updated["documents"][-1])
 
 
+@router.get("/applications/{application_id}/documents", response_model=list[Document])
+def list_documents(application_id: str, repo: Repo) -> list[Document]:
+    """CR-1: what the citizen actually filed, in upload order, bytes kept in the store."""
+    record = require_record(repo, application_id)
+    return [document_view(document) for document in record["documents"]]
+
+
 @router.post("/applications/{application_id}/scrutiny/run", response_model=ScrutinyReport)
 def run_scrutiny_for(
     application_id: str, repo: Repo

@@ -16,6 +16,7 @@ COVERED = {
     ("post", "/applications"),
     ("get", "/applications/{id}"),
     ("post", "/applications/{id}/documents"),
+    ("get", "/applications/{id}/documents"),
     ("post", "/applications/{id}/scrutiny/run"),
     ("get", "/applications/{id}/scrutiny"),
     ("get", "/officer/queue"),
