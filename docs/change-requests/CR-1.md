@@ -76,3 +76,15 @@ Widen `Application` with `documents: Document[]`. Rejected: `Application` is ret
 `POST /applications` and `GET /applications/{id}`, so this changes two existing responses and
 Track B's generated types, for data that is naturally a sub-resource. The additive GET costs
 Track B one method instead of a type change.
+
+## Validation (I1, pre-applied to a copy — not the frozen file)
+
+- Applied the `get:` block above to a scratch copy of the contract; `yaml.safe_load` parses; the
+  live conformance suite passes **except** `test_no_contract_path_goes_unjudged` — by design,
+  because CR-1 adds a path with no test yet. That guard is exactly the obligation it creates:
+  **Track A must add a documents-GET test on landing.**
+- Payload checks: a `Document[]` response is accepted; a `Document` carrying `contentBase64` is
+  rejected (bytes never go on the wire).
+- **Insertion caveat:** the `get:` goes *inside* the existing `/applications/{id}/documents:`
+  mapping, after its `post:` — a second top-level `/applications/{id}/documents:` key would be
+  invalid YAML.
