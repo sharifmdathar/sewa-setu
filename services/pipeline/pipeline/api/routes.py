@@ -1,19 +1,21 @@
 """The contract routes: every path in shared/contracts/openapi.yaml, implemented exactly.
 
 Responses are always explicit models rather than store records, so nothing the contract does
-not declare - a stored document's bytes, an internal id - can reach the wire. Error bodies use
-FastAPI's own {"detail": ...}; A9 pins the shapes of the failure paths.
+not declare - a stored document's bytes, an internal id - can reach the wire. Failures raise
+`ApiError` (see pipeline/api/errors.py), which is the only way a non-2xx leaves this router, so
+every error carries a status, a machine-readable code and a string detail.
 """
 
 from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 
 from pipeline.agent import ScrutinyReport
 from pipeline.agent import run_scrutiny as run_pipeline
 from pipeline.api import catalog
+from pipeline.api.errors import ApiError
 from pipeline.api.models import (
     Application,
     ApplicationCreate,
@@ -27,7 +29,10 @@ from pipeline.api.models import (
 )
 from pipeline.api.repository import Repository, now
 from pipeline.ingestion import UploadError
+from pipeline.logs import event, get_logger
 from pipeline.rules import load_rule_config
+
+LOGGER = get_logger("api")
 
 router = APIRouter()
 APPLICATION_FIELDS = (
@@ -52,7 +57,7 @@ Repo = Annotated[Repository, Depends(repository)]
 def require_record(repo: Repository, application_id: str) -> dict[str, Any]:
     record = repo.get(application_id)
     if record is None:
-        raise HTTPException(status_code=404, detail=f"application '{application_id}' not found")
+        raise ApiError.unknown_application(application_id)
     return record
 
 
@@ -74,7 +79,7 @@ def create_application(
     body: ApplicationCreate, repo: Repo
 ) -> Application:
     if catalog.get(body.service_id) is None:
-        raise HTTPException(status_code=400, detail=f"unknown serviceId '{body.service_id}'")
+        raise ApiError.unknown_service(body.service_id)
     return application_view(repo.create(body.service_id, body.applicant_fields))
 
 
@@ -99,7 +104,7 @@ def upload_document(
     try:
         updated = repo.add_document(record, body.doc_type, body.file_name, body.content_base64)
     except UploadError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise ApiError.invalid_document(body.file_name, str(exc)) from exc
     return document_view(updated["documents"][-1])
 
 
@@ -109,10 +114,24 @@ def run_scrutiny_for(
 ) -> ScrutinyReport:
     """Ingestion -> extraction -> rules -> adjudication -> scoring, then persisted."""
     record = require_record(repo, application_id)
+    if not record["documents"]:
+        raise ApiError.documents_required(application_id)
     pending = repo.mark_scrutiny_pending(record)
     data, documents = repo.scrutiny_request(pending, now().date())
     report = run_pipeline(data, documents, generated_at=now())
     repo.save_report(report)
+    event(
+        LOGGER,
+        "scrutiny completed",
+        applicationId=report.application_id,
+        riskScore=report.risk_score,
+        recommendation=report.recommendation,
+        checks={check.check_id: check.status for check in report.checks},
+        flags=[check.check_id for check in report.checks if check.status == "fail"],
+        documents=len(documents),
+        extractor=report.model_meta.extractor,
+        adjudicator=report.model_meta.adjudicator,
+    )
     return report
 
 
@@ -123,9 +142,7 @@ def latest_scrutiny(
     require_record(repo, application_id)
     report = repo.get_report(application_id)
     if report is None:
-        raise HTTPException(
-            status_code=404, detail=f"scrutiny has not been run for '{application_id}'"
-        )
+        raise ApiError.scrutiny_not_run(application_id)
     return report
 
 
@@ -140,6 +157,15 @@ def record_decision(
 ) -> DecisionResult:
     record = require_record(repo, body.application_id)
     updated = repo.decide(record, body.decision, body.officer_notes)
+    # The officer's verdict is the human-in-the-loop record: the agent only ever recommended.
+    event(
+        LOGGER,
+        "officer decision",
+        applicationId=body.application_id,
+        decision=body.decision,
+        status=updated["status"],
+        riskScore=(repo.get_report(body.application_id) or {}).get("riskScore"),
+    )
     return DecisionResult(applicationId=updated["id"], status=updated["status"])
 
 
