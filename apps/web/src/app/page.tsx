@@ -1,6 +1,11 @@
 import { api, apiMode } from "@/lib/api/client";
 import type { Service } from "@/lib/api/types";
 
+// Server-render on demand (like every other data page). Without this, `next build`
+// statically prerenders `/` and calls listServices at build time — which fails in
+// API_MODE=real unless the pipeline is up during the build.
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const services = await api.listServices();
   return (
