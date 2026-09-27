@@ -3,9 +3,15 @@
 // Client form for the dynamic application (J1 step 2). Posts straight to the
 // server action (progressive enhancement: works without JS enabled).
 
-import { useTransition } from "react";
 import { createApplicationAction } from "../../../actions";
 import type { FieldDef } from "@/lib/fields";
+
+// Submission is handled entirely by <form action={serverAction}> (React's
+// built-in form-action transition). We deliberately do NOT add a useTransition
+// or onClick to the submit button: in React 18.3 a competing transition there
+// can race the form action and swallow the submit (no request, no error).
+// useFormStatus is not a runtime export of react-dom 18.3.1, so the button
+// stays enabled; the action redirects away, so double-submit isn't a concern.
 
 export function ApplyForm({
   serviceId,
@@ -14,8 +20,6 @@ export function ApplyForm({
   serviceId: string;
   fields: { name: string; def: FieldDef }[];
 }) {
-  const [pending, startTransition] = useTransition();
-
   return (
     <form
       action={createApplicationAction}
@@ -51,11 +55,9 @@ export function ApplyForm({
       ))}
       <button
         type="submit"
-        disabled={pending}
-        onClick={() => startTransition(() => {})}
-        className="min-h-12 w-full rounded-md bg-zinc-900 px-5 py-3 text-base font-semibold text-white hover:bg-zinc-700 disabled:opacity-60"
+        className="min-h-12 w-full rounded-md bg-zinc-900 px-5 py-3 text-base font-semibold text-white hover:bg-zinc-700"
       >
-        {pending ? "Submitting…" : "Submit application"}
+        Submit application
       </button>
     </form>
   );
