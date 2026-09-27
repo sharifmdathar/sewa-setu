@@ -97,6 +97,8 @@ export interface MetricsSummary {
   flagRate: number;
   evalPrecision?: number;
   evalRecall?: number;
+  applicationsByDay?: { date: string; count: number }[]; // CR-3; date = YYYY-MM-DD
+  riskDistribution?: { band: "low" | "medium" | "high"; count: number }[]; // CR-3
   generatedAt: string; // date-time
 }
 

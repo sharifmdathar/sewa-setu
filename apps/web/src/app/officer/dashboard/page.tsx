@@ -1,6 +1,6 @@
-// B6 — officer metrics dashboard. Cards are 100% getMetrics. Charts use the
-// CR-3 stopgap (getQueue) since the frozen MetricsSummary has no series fields;
-// see docs/change-requests/CR-3.md.
+// B6 — officer metrics dashboard. Cards are 100% getMetrics. Charts use
+// MetricsSummary.applicationsByDay / riskDistribution (CR-3) when the server sends
+// them, and fall back to the getQueue derivation when absent (see CR-3.md).
 
 import Link from "next/link";
 import { getApiClient } from "@/lib/api/client";
@@ -24,6 +24,11 @@ export default async function DashboardPage() {
   const [metrics, queue] = await Promise.all([api.getMetrics(), api.getQueue()]);
   // getQueue now also returns decided apps; charts keep the pending-only view.
   const pendingQueue = queue.filter((q) => q.status !== "decided");
+  // Prefer the contract series (CR-3); fall back to the getQueue derivation.
+  const dayData = metrics.applicationsByDay ?? appsByDay(pendingQueue);
+  const riskData = metrics.riskDistribution ?? riskDistribution(pendingQueue);
+  const avg = metrics.avgScrutinySeconds;
+  const avgLabel = avg < 1 ? `${Math.round(avg * 1000)} ms` : `${avg.toFixed(1)} s`;
 
   return (
     <div className="space-y-6">
@@ -45,7 +50,7 @@ export default async function DashboardPage() {
         <Card label="Decided" value={String(metrics.decided)} />
         <Card
           label="Avg scrutiny"
-          value={`${metrics.avgScrutinySeconds}s`}
+          value={avgLabel}
           hint="target < 60s"
         />
         <Card
@@ -56,8 +61,8 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ApplicationsByDayChart data={appsByDay(pendingQueue)} />
-        <RiskDistributionChart data={riskDistribution(pendingQueue)} />
+        <ApplicationsByDayChart data={dayData} />
+        <RiskDistributionChart data={riskData} />
       </div>
 
       {(metrics.evalPrecision != null || metrics.evalRecall != null) && (
