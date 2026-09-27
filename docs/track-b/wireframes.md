@@ -142,7 +142,7 @@ everything else is a Server Component; arrows are Server Action posts.
   │ ▇ 09-19 ▇▇ 09-20 ▇ 09-21 … │ │ ▇▇▇ low ▇ medium ▓▓ high   │
   │ (BarChart, recharts [C])   │ │ bands: <30 / 30-59 / ≥60   │
   └────────────────────────────┘ └────────────────────────────┘
-  data: getMetrics (cards) + getQueue (charts, CR-1 stopgap)
+  data: getMetrics (cards) + getQueue (charts, CR-3 stopgap)
 ```
 
 ## BOUNDARY MAP (client islands & route handlers)

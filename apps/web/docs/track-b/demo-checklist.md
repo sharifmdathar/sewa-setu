@@ -43,5 +43,5 @@ Prereq: `cd apps/web && npm run dev` → http://localhost:3000 (`API_MODE` unset
 
 ## Known demo edges
 - Mock store lives in the dev-server process: restart = fresh seed.
-- Chart data comes from `getQueue` until CR-1 lands (see
-  `docs/change-requests/CR-1.md`).
+- Chart data comes from `getQueue` until CR-3 lands (see
+  `docs/change-requests/CR-3.md`).

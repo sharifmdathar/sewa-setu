@@ -63,6 +63,6 @@ timeline message — the citizen is the auditor of record for their own file.
   (B7 maps HTTP errors into the same shape).
 
 ## Known compromises
-- Charts bucket `getQueue.updatedAt` until CR-1 (Metrics series fields).
+- Charts bucket `getQueue.updatedAt` until CR-3 (Metrics series fields).
 - Auth is the role switcher (SPEC §3 explicitly out of scope).
 - Poll-based feed would become SSE/event-stream at productionization.

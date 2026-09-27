@@ -1,4 +1,4 @@
-# CR-1 — Add chart-ready series to `MetricsSummary`
+# CR-3 — Add chart-ready series to `MetricsSummary`
 
 - **Status:** PROPOSED (drafted by Track B during prompt B6; not applied — contract is FROZEN)
 - **Raised by:** Track B (Person 2)
