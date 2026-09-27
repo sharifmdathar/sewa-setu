@@ -3,21 +3,29 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa; /* zinc-50 */
+  --foreground: #18181b; /* zinc-900 */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    color: var(--foreground);
+    background: var(--background);
+    /* Use the Geist font actually loaded in layout.tsx (was overridden by Arial). */
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+  :focus-visible {
+    outline: 2px solid #4f46e5; /* brand-600 */
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  ::selection {
+    background: #c7d2fe; /* brand-200 */
+  }
 }
 
 @layer utilities {

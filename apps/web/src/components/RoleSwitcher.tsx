@@ -43,8 +43,8 @@ export function RoleSwitcher() {
           onClick={() => setRole(r.id)}
           className={`min-h-12 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
             role === r.id
-              ? "bg-zinc-900 text-white"
-              : "text-zinc-600 hover:bg-zinc-100"
+              ? "bg-brand-600 text-white shadow-sm"
+              : "text-zinc-600 hover:bg-brand-50 hover:text-brand-700"
           }`}
         >
           {r.label}
