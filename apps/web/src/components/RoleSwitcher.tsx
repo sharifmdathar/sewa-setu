@@ -1,33 +1,27 @@
 // Citizen/officer role switcher — POC stand-in for auth (SPEC §3 OUT).
-// Client component: persists choice in localStorage; B3/B4 routes will read it
-// (and can be deep-linked independently — this is a navigator, not a gate).
+// A navigator, not a gate: it links to each journey's root and highlights the
+// one you're currently in. On the landing page neither is active (you haven't
+// chosen yet) — the pressed state is derived from the path, not a stored guess.
 
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-export type Role = "citizen" | "officer";
+type Role = "citizen" | "officer";
 
 const ROLES: { id: Role; label: string; href: string }[] = [
   { id: "citizen", label: "Citizen", href: "/citizen" },
   { id: "officer", label: "Officer", href: "/officer" },
 ];
 
-const STORAGE_KEY = "sewasetu.role";
-
 export function RoleSwitcher() {
-  const [role, setRole] = useState<Role>("citizen");
-
-  // Restore after mount only — keeps SSR markup deterministic (no hydration diff).
-  useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === "officer" || saved === "citizen") setRole(saved);
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, role);
-  }, [role]);
+  const pathname = usePathname();
+  const active: Role | null = pathname.startsWith("/citizen")
+    ? "citizen"
+    : pathname.startsWith("/officer")
+      ? "officer"
+      : null;
 
   return (
     <div
@@ -35,21 +29,23 @@ export function RoleSwitcher() {
       aria-label="Role switcher"
       className="flex items-center gap-1 rounded-full border border-zinc-200 bg-white p-1"
     >
-      {ROLES.map((r) => (
-        <Link
-          key={r.id}
-          href={r.href}
-          aria-pressed={role === r.id}
-          onClick={() => setRole(r.id)}
-          className={`inline-flex min-h-12 items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-            role === r.id
-              ? "bg-brand-600 text-white shadow-sm"
-              : "text-zinc-600 hover:bg-brand-50 hover:text-brand-700"
-          }`}
-        >
-          {r.label}
-        </Link>
-      ))}
+      {ROLES.map((r) => {
+        const on = active === r.id;
+        return (
+          <Link
+            key={r.id}
+            href={r.href}
+            aria-current={on ? "page" : undefined}
+            className={`inline-flex min-h-12 items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              on
+                ? "bg-brand-600 text-white shadow-sm"
+                : "text-zinc-600 hover:bg-brand-50 hover:text-brand-700"
+            }`}
+          >
+            {r.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }

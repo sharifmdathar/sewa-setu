@@ -1,44 +1,63 @@
-import { api, apiMode } from "@/lib/api/client";
-import type { Service } from "@/lib/api/types";
+import Link from "next/link";
 
-// Server-render on demand (like every other data page). Without this, `next build`
-// statically prerenders `/` and calls listServices at build time — which fails in
-// API_MODE=real unless the pipeline is up during the build.
-export const dynamic = "force-dynamic";
+// Landing = a neutral role chooser. Deliberately no data fetch (so it stays
+// static and never hits the API at build time) and no raw "catalog smoke test"
+// block — that belongs in /dev/components, not the front door.
 
-export default async function Home() {
-  const services = await api.listServices();
+const ROLES = [
+  {
+    href: "/citizen",
+    title: "Citizen",
+    desc: "Apply for a certificate, upload your documents, and track your application status in one place.",
+    cta: "Start an application",
+  },
+  {
+    href: "/officer",
+    title: "Officer",
+    desc: "Review the risk-ranked queue, read explainable scrutiny reports, and record the decision.",
+    cta: "Open the review queue",
+  },
+];
+
+export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-10">
-      <h1 className="text-4xl font-bold tracking-tight">
-        Sewa Setu Scrutiny POC
-      </h1>
-      <p className="max-w-md text-center text-zinc-600">
-        Agentic application scrutiny &amp; document verification — citizen and
-        officer workbench.
-      </p>
-      <Catalog services={services} />
-    </main>
-  );
-}
+    <div className="mx-auto w-full max-w-3xl py-10">
+      <header className="text-center">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          Sewa Setu
+        </h1>
+        <p className="mx-auto mt-3 max-w-xl text-zinc-600">
+          Agentic application scrutiny &amp; document verification. The agent
+          recommends; the officer decides — with an explanation behind every
+          check.
+        </p>
+      </header>
 
-/** Server-rendered smoke test that the ApiClient + mock transport work. */
-function Catalog({ services }: { services: Service[] }) {
-  return (
-    <section className="w-full max-w-lg rounded-lg border border-zinc-200 p-6">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
-        Service catalog ({apiMode()} mode, {services.length} services)
-      </h2>
-      <ul className="space-y-2">
-        {services.map((s) => (
-          <li key={s.id} className="flex items-baseline justify-between">
-            <span className="font-medium">{s.name}</span>
-            <span className="text-sm text-zinc-500">
-              {s.requiredDocTypes.join(", ")}
+      <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        {ROLES.map((r) => (
+          <Link
+            key={r.href}
+            href={r.href}
+            className="group flex flex-col rounded-xl border border-zinc-200 bg-white p-6 shadow-card transition hover:border-brand-500 hover:shadow-lg"
+          >
+            <span className="text-lg font-semibold">{r.title}</span>
+            <span className="mt-2 flex-1 text-sm text-zinc-600">{r.desc}</span>
+            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
+              {r.cta}
+              <span
+                aria-hidden="true"
+                className="transition-transform group-hover:translate-x-0.5"
+              >
+                →
+              </span>
             </span>
-          </li>
+          </Link>
         ))}
-      </ul>
-    </section>
+      </div>
+
+      <p className="mt-10 text-center text-xs text-zinc-400">
+        POC · synthetic data only · no real PII
+      </p>
+    </div>
   );
 }
