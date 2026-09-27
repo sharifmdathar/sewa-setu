@@ -225,6 +225,20 @@ def test_metrics_describe_the_store(client: TestClient) -> None:
     assert payload["avgScrutinySeconds"] >= 0.0
 
 
+def test_an_info_request_stays_pending_rather_than_becoming_a_decision(
+    client: TestClient,
+) -> None:
+    application_id = filed_application(client)
+    client.post(f"/applications/{application_id}/scrutiny/run")
+    decide(client, application_id, "request_info", "Attach the revenue record.")
+
+    payload = client.get("/metrics/summary").json()
+
+    assert view(client, application_id)[0] == "info_requested"
+    assert payload["pending"] == 1
+    assert payload["decided"] == 0
+
+
 def test_metrics_omit_the_eval_fields_until_the_harness_has_run(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
