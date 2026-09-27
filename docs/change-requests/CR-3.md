@@ -96,3 +96,20 @@ derivation when absent) — a one-line data-source change in `officer/dashboard/
 **Validation (pre-applied to a copy):** both-series payload accepted; today's no-series payload
 still accepted (backward compatible); non-ISO date, band outside the enum, missing `count`, and
 negative `count` all rejected.
+
+---
+
+## Applied - M4 paired session (2026-09-27)
+
+Both properties added inside `MetricsSummary.properties`; `required` left at its 6, so old
+consumers are unaffected. Track A populates both from the store:
+
+- `applicationsByDay` - applications per calendar day of `createdAt`, oldest first. Only observed
+  days appear, so a fresh store returns `[]`.
+- `riskDistribution` - `low` under `cleanCeiling` (30), `medium` under `flagThreshold` (60),
+  `high` at or above it, per SPEC.md section 7. All three bands always appear so the chart axis is
+  stable; only scrutinized applications are counted, matching `flagRate`'s denominator.
+
+Verified live: 21 applications, 20 day buckets, bands `{low: 18, medium: 0, high: 3}` summing to
+the 21 scored applications. Track B still needs to switch the two charts from the getQueue
+stopgap to these fields and add both as optional in `types.ts`.

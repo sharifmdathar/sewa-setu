@@ -149,9 +149,9 @@ improving recall means richer scoring (A6 follow-up), not moving the goal posts.
 - **Auth**: none, by design (SPEC §3 — production auth is out, the demo uses a role switcher).
   Every path is unauthenticated; do not expose this port.
 - **M4 is under way (paired session, 2026-09-27).** `m4-pre-contract` marks the pre-apply state
-  (`git reset --hard m4-pre-contract` rolls the whole thing back). CR-2 is applied: contract
-  description + `queue()` returning every status + `open_count()` as the single definition of
-  "open", so the dashboard's `pending` and the queue cannot disagree. CR-3 and CR-1 follow. `shared/contracts/openapi.yaml` is byte-identical to the scaffold
+  (`git reset --hard m4-pre-contract` rolls the whole thing back). CR-2 and CR-3 are applied:
+  `queue()` returns every status with `open_count()` as the one definition of "open", and
+  `MetricsSummary` gained the two chart series. CR-1 (documents GET) follows. `shared/contracts/openapi.yaml` is byte-identical to the scaffold
   freeze (verified `git log -1 -- shared/contracts/openapi.yaml`). The CR-1/2/3 hunks are recorded
   and pre-validated, but editing the contract needs the paired session - and while only one track
   is present, a policy guard blocks the edit outright, so this is not something a lone agent can

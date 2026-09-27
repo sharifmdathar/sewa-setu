@@ -17,7 +17,7 @@ from pipeline.api import catalog
 from pipeline.api.evalfeed import latest_eval_metrics
 from pipeline.extraction import DocumentContent
 from pipeline.ingestion import stored_document, to_content
-from pipeline.rules import ScrutinyInput
+from pipeline.rules import RuleConfig, ScrutinyInput
 from pipeline.store.jsonstore import JsonStore
 
 APPLICATIONS = "applications"
@@ -255,11 +255,37 @@ class Repository:
         return sorted(items, key=lambda item: (-int(item["riskScore"]), str(item["applicationId"])))
 
     @staticmethod
+    def _by_day(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Applications per calendar day of `createdAt`, oldest first (CR-3 series)."""
+        counts: dict[str, int] = {}
+        for record in records:
+            counts[str(record["createdAt"])[:10]] = counts.get(str(record["createdAt"])[:10], 0) + 1
+        return [{"date": day, "count": counts[day]} for day in sorted(counts)]
+
+    @staticmethod
+    def _risk_bands(scores: list[int], config: RuleConfig) -> list[dict[str, Any]]:
+        """low < cleanCeiling, medium < flagThreshold, high >= it (SPEC.md section 7).
+
+        Only scrutinized applications appear: an unscored one has no band, and `flagRate` uses
+        the same denominator, so the two figures can be read together. All three bands are always
+        emitted (a chart wants a stable axis), unlike `_by_day`, which reports only observed days.
+        """
+        bands = {"low": 0, "medium": 0, "high": 0}
+        for score in scores:
+            if score >= config.flag_threshold:
+                bands["high"] += 1
+            elif score >= config.clean_ceiling:
+                bands["medium"] += 1
+            else:
+                bands["low"] += 1
+        return [{"band": name, "count": count} for name, count in bands.items()]
+
+    @staticmethod
     def open_count(records: list[dict[str, Any]]) -> int:
         """Applications still awaiting someone - the queue's and the dashboard's one definition."""
         return sum(1 for record in records if record["status"] in OPEN_STATUSES)
 
-    def metrics(self, flag_threshold: int, generated_at: dt.datetime) -> dict[str, Any]:
+    def metrics(self, config: RuleConfig, generated_at: dt.datetime) -> dict[str, Any]:
         records = self.all()
         scores = [
             int(report["riskScore"])
@@ -281,9 +307,11 @@ class Repository:
             "avgScrutinySeconds": round(sum(latencies) / len(latencies) / 1000, 5)
             if latencies
             else 0.0,
-            "flagRate": round(sum(s >= flag_threshold for s in scores) / len(evaluated), 3)
+            "flagRate": round(sum(s >= config.flag_threshold for s in scores) / len(evaluated), 3)
             if evaluated
             else 0.0,
+            "applicationsByDay": self._by_day(records),
+            "riskDistribution": self._risk_bands(scores, config),
             "generatedAt": _stamp(generated_at),
         }
         summary.update(latest_eval_metrics())

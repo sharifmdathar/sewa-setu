@@ -179,4 +179,4 @@ def record_decision(
     response_model_exclude_none=True,
 )
 def metrics_summary(repo: Repo) -> dict[str, Any]:
-    return repo.metrics(load_rule_config().flag_threshold, now())
+    return repo.metrics(load_rule_config(), now())

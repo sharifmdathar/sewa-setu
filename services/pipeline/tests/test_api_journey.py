@@ -8,6 +8,7 @@ two applicants who really are different people must not be flagged as document d
 from __future__ import annotations
 
 import base64
+import datetime as dt
 from pathlib import Path
 from typing import Any
 
@@ -246,6 +247,40 @@ def test_an_info_request_stays_pending_rather_than_becoming_a_decision(
     assert view(client, application_id)[0] == "info_requested"
     assert payload["pending"] == 1
     assert payload["decided"] == 0
+
+
+def test_metrics_carry_chart_ready_series_without_losing_the_scalars(client: TestClient) -> None:
+    """CR-3: the dashboard's two charts come from getMetrics, not from bucketing the queue."""
+    scored = [filed_application(client, 0), filed_application(client, 1)]
+    new_application(client, 2)
+    for app_id in scored:
+        client.post(f"/applications/{app_id}/scrutiny/run")
+
+    payload = client.get("/metrics/summary").json()
+
+    assert_valid(payload, "MetricsSummary")
+    days = payload["applicationsByDay"]
+    bands = payload["riskDistribution"]
+    assert sum(int(day["count"]) for day in days) == payload["applicationsTotal"] == 3
+    assert [day["date"] for day in days] == sorted(day["date"] for day in days)
+    dt.date.fromisoformat(days[0]["date"])  # the contract types it `format: date`
+    assert {band["band"] for band in bands} <= {"low", "medium", "high"}
+    # only scrutinized applications have a band; the third one is deliberately not counted
+    assert sum(int(band["count"]) for band in bands) == len(scored)
+    assert all(int(band["count"]) >= 0 for band in bands)
+
+
+def test_a_fresh_store_reports_no_days_but_the_three_zero_bands(client: TestClient) -> None:
+    """Days are observed data, bands are a fixed categorical axis - so they differ when empty."""
+    payload = client.get("/metrics/summary").json()
+
+    assert_valid(payload, "MetricsSummary")
+    assert payload["applicationsByDay"] == []
+    assert payload["riskDistribution"] == [
+        {"band": "low", "count": 0},
+        {"band": "medium", "count": 0},
+        {"band": "high", "count": 0},
+    ]
 
 
 def test_metrics_report_real_scrutiny_time_not_a_rounded_zero(

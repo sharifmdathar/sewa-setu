@@ -428,5 +428,33 @@ components:
                 properties: { band: { type: string, enum: [low, medium, high] },
                               count: { type: integer, minimum: 0 } } } },
             generatedAt: { type: string, format: date-time },
+            applicationsByDay:
+              {
+                type: array,
+                items:
+                  {
+                    type: object,
+                    required: [date, count],
+                    properties:
+                      {
+                        date: { type: string, format: date },
+                        count: { type: integer, minimum: 0 },
+                      },
+                  },
+              },
+            riskDistribution:
+              {
+                type: array,
+                items:
+                  {
+                    type: object,
+                    required: [band, count],
+                    properties:
+                      {
+                        band: { type: string, enum: [low, medium, high] },
+                        count: { type: integer, minimum: 0 },
+                      },
+                  },
+              },
           },
       }

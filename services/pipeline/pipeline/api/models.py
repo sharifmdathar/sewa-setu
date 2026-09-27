@@ -107,6 +107,20 @@ class QueueItem(CamelModel):
     updated_at: dt.datetime
 
 
+class DailyCount(CamelModel):
+    """openapi.yaml -> MetricsSummary.applicationsByDay item."""
+
+    date: dt.date
+    count: int = Field(ge=0)
+
+
+class RiskBandCount(CamelModel):
+    """openapi.yaml -> MetricsSummary.riskDistribution item (SPEC.md section 7 bands)."""
+
+    band: Literal["low", "medium", "high"]
+    count: int = Field(ge=0)
+
+
 class MetricsSummary(CamelModel):
     """openapi.yaml -> MetricsSummary. evalPrecision/Recall appear once A8's report exists."""
 
@@ -118,3 +132,5 @@ class MetricsSummary(CamelModel):
     generated_at: dt.datetime
     eval_precision: float | None = None
     eval_recall: float | None = None
+    applications_by_day: list[DailyCount] | None = None
+    risk_distribution: list[RiskBandCount] | None = None
