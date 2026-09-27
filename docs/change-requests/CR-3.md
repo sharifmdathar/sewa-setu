@@ -105,10 +105,20 @@ Both properties added inside `MetricsSummary.properties`; `required` left at its
 consumers are unaffected. Track A populates both from the store:
 
 - `applicationsByDay` - applications per calendar day of `createdAt`, oldest first. Only observed
-  days appear, so a fresh store returns `[]`.
+  days appear.
 - `riskDistribution` - `low` under `cleanCeiling` (30), `medium` under `flagThreshold` (60),
-  `high` at or above it, per SPEC.md section 7. All three bands always appear so the chart axis is
-  stable; only scrutinized applications are counted, matching `flagRate`'s denominator.
+  `high` at or above it, per SPEC.md section 7. Only scrutinized applications are counted,
+  matching `flagRate`'s denominator.
+
+### Revised after Track B's push (same session)
+
+Both series are **omitted when they have nothing to plot** - no applications for
+`applicationsByDay`, no scrutinized applications for `riskDistribution`. An empty array on the
+wire would render a blank chart where the truth is "no data yet"; the fields are optional in this
+CR precisely so a client can feature-detect, and the route already serialises them through
+`response_model_exclude_none`. Once anything is scored all three bands appear together, so the
+histogram's axis stays stable at zero as well as at three. A consumer must therefore treat both
+keys as absent-or-array, never as always-array.
 
 Verified live: 21 applications, 20 day buckets, bands `{low: 18, medium: 0, high: 3}` summing to
 the 21 scored applications. Track B still needs to switch the two charts from the getQueue

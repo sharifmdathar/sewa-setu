@@ -265,22 +265,23 @@ def test_metrics_carry_chart_ready_series_without_losing_the_scalars(client: Tes
     assert [day["date"] for day in days] == sorted(day["date"] for day in days)
     dt.date.fromisoformat(days[0]["date"])  # the contract types it `format: date`
     assert {band["band"] for band in bands} <= {"low", "medium", "high"}
+    # once anything is scored all three bands appear, so the chart's axis stays stable
+    assert len(bands) == 3
     # only scrutinized applications have a band; the third one is deliberately not counted
     assert sum(int(band["count"]) for band in bands) == len(scored)
     assert all(int(band["count"]) >= 0 for band in bands)
 
 
-def test_a_fresh_store_reports_no_days_but_the_three_zero_bands(client: TestClient) -> None:
-    """Days are observed data, bands are a fixed categorical axis - so they differ when empty."""
+def test_a_fresh_store_omits_both_series_rather_than_reporting_zero(
+    client: TestClient,
+) -> None:
+    """CR-3: the fields are optional, and 'nothing to plot' is shown by their absence."""
     payload = client.get("/metrics/summary").json()
 
     assert_valid(payload, "MetricsSummary")
-    assert payload["applicationsByDay"] == []
-    assert payload["riskDistribution"] == [
-        {"band": "low", "count": 0},
-        {"band": "medium", "count": 0},
-        {"band": "high", "count": 0},
-    ]
+    assert "applicationsByDay" not in payload
+    assert "riskDistribution" not in payload
+    assert payload["applicationsTotal"] == 0 and payload["flagRate"] == 0.0
 
 
 def test_metrics_report_real_scrutiny_time_not_a_rounded_zero(

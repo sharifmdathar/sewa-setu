@@ -267,8 +267,8 @@ class Repository:
         """low < cleanCeiling, medium < flagThreshold, high >= it (SPEC.md section 7).
 
         Only scrutinized applications appear: an unscored one has no band, and `flagRate` uses
-        the same denominator, so the two figures can be read together. All three bands are always
-        emitted (a chart wants a stable axis), unlike `_by_day`, which reports only observed days.
+        the same denominator, so the two figures can be read together. Whenever any score exists
+        all three bands are emitted, so the chart axis is stable at zero as well as at three.
         """
         bands = {"low": 0, "medium": 0, "high": 0}
         for score in scores:
@@ -287,19 +287,10 @@ class Repository:
 
     def metrics(self, config: RuleConfig, generated_at: dt.datetime) -> dict[str, Any]:
         records = self.all()
-        scores = [
-            int(report["riskScore"])
-            for report in (self.get_report(str(record["id"])) for record in records)
-            if report
-        ]
-        reports = [
-            (record, self.get_report(str(record["id"])))
-            for record in records
-        ]
-        evaluated = [record for record, report in reports if report is not None]
-        latencies = [
-            scrutiny_ms(record, report) for record, report in reports if report is not None
-        ]
+        reports = [(record, self.get_report(str(record["id"]))) for record in records]
+        scored = [(record, report) for record, report in reports if report is not None]
+        scores = [int(report["riskScore"]) for _, report in scored]
+        latencies = [scrutiny_ms(record, report) for record, report in scored]
         summary: dict[str, Any] = {
             "applicationsTotal": len(records),
             "pending": self.open_count(records),
@@ -307,11 +298,13 @@ class Repository:
             "avgScrutinySeconds": round(sum(latencies) / len(latencies) / 1000, 5)
             if latencies
             else 0.0,
-            "flagRate": round(sum(s >= config.flag_threshold for s in scores) / len(evaluated), 3)
-            if evaluated
+            "flagRate": round(sum(s >= config.flag_threshold for s in scores) / len(scored), 3)
+            if scored
             else 0.0,
-            "applicationsByDay": self._by_day(records),
-            "riskDistribution": self._risk_bands(scores, config),
+            # Absent rather than empty: the UI feature-detects, and `[]` would draw a blank
+            # chart where "no data yet" is the truth (CR-3, both fields optional).
+            "applicationsByDay": self._by_day(records) or None,
+            "riskDistribution": self._risk_bands(scores, config) if scores else None,
             "generatedAt": _stamp(generated_at),
         }
         summary.update(latest_eval_metrics())
