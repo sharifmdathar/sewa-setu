@@ -1,0 +1,402 @@
+openapi: 3.0.3
+info:
+  title: Sewa Setu Agentic Scrutiny Contract
+  version: 1.0.0 # FROZEN — changes only via CR in integration phase
+servers:
+  - url: http://localhost:8000
+paths:
+  /healthz:
+    get: { responses: { "200": { description: ok } } }
+  /services:
+    get:
+      responses:
+        {
+          "200":
+            {
+              description: catalog,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/Service" },
+                        },
+                    },
+                },
+            },
+        }
+  /applications:
+    post:
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    {
+                      type: object,
+                      required: [serviceId, applicantFields],
+                      properties:
+                        {
+                          serviceId: { type: string },
+                          applicantFields: { type: object },
+                        },
+                    },
+                },
+            },
+        }
+      responses:
+        {
+          "201":
+            {
+              description: created,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/Application" } },
+                },
+            },
+        }
+  /applications/{id}:
+    get:
+      parameters:
+        [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        {
+          "200":
+            {
+              description: app + timeline,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/Application" } },
+                },
+            },
+          "404": { description: not found },
+        }
+  /applications/{id}/documents:
+    post:
+      parameters:
+        [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    {
+                      type: object,
+                      required: [docType, fileName, contentBase64],
+                      properties:
+                        {
+                          docType: { type: string },
+                          fileName: { type: string },
+                          contentBase64: { type: string },
+                        },
+                    },
+                },
+            },
+        }
+      responses:
+        {
+          "201":
+            {
+              description: stored,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/Document" } },
+                },
+            },
+        }
+  /applications/{id}/scrutiny/run:
+    post:
+      parameters:
+        [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        {
+          "200":
+            {
+              description: report,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/ScrutinyReport" } },
+                },
+            },
+        }
+  /applications/{id}/scrutiny:
+    get:
+      parameters:
+        [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        {
+          "200":
+            {
+              description: latest report,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/ScrutinyReport" } },
+                },
+            },
+          "404": { description: not run yet },
+        }
+  /officer/queue:
+    get:
+      responses:
+        {
+          "200":
+            {
+              description: pending apps w/ risk,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/QueueItem" },
+                        },
+                    },
+                },
+            },
+        }
+  /officer/decisions:
+    post:
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Decision" } },
+            },
+        }
+      responses:
+        {
+          "200":
+            {
+              description: applied,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: object,
+                          properties:
+                            {
+                              applicationId: { type: string },
+                              status:
+                                { $ref: "#/components/schemas/AppStatus" },
+                            },
+                        },
+                    },
+                },
+            },
+        }
+  /metrics/summary:
+    get:
+      responses:
+        {
+          "200":
+            {
+              description: metrics,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/MetricsSummary" } },
+                },
+            },
+        }
+components:
+  schemas:
+    AppStatus:
+      {
+        type: string,
+        enum:
+          [
+            submitted,
+            documents_uploaded,
+            scrutiny_pending,
+            scrutiny_done,
+            decided,
+            info_requested,
+          ],
+      }
+    Service:
+      {
+        type: object,
+        required: [id, name, requiredDocTypes],
+        properties:
+          {
+            id: { type: string },
+            name: { type: string },
+            requiredDocTypes: { type: array, items: { type: string } },
+            fieldSchema: { type: object },
+          },
+      }
+    TimelineEvent:
+      {
+        type: object,
+        required: [at, actor, event, message],
+        properties:
+          {
+            at: { type: string, format: date-time },
+            actor: { type: string, enum: [citizen, system, officer] },
+            event: { type: string },
+            message: { type: string },
+          },
+      }
+    Application:
+      {
+        type: object,
+        required:
+          [
+            id,
+            serviceId,
+            status,
+            applicantFields,
+            createdAt,
+            updatedAt,
+            timeline,
+          ],
+        properties:
+          {
+            id: { type: string },
+            serviceId: { type: string },
+            status: { $ref: "#/components/schemas/AppStatus" },
+            applicantFields: { type: object },
+            createdAt: { type: string, format: date-time },
+            updatedAt: { type: string, format: date-time },
+            timeline:
+              {
+                type: array,
+                items: { $ref: "#/components/schemas/TimelineEvent" },
+              },
+          },
+      }
+    Document:
+      {
+        type: object,
+        required: [id, docType, fileName, uploadedAt, sha256],
+        properties:
+          {
+            id: { type: string },
+            docType: { type: string },
+            fileName: { type: string },
+            uploadedAt: { type: string, format: date-time },
+            sha256: { type: string },
+          },
+      }
+    ScrutinyCheck:
+      {
+        type: object,
+        required: [checkId, label, status, severity, evidence, explanation],
+        properties:
+          {
+            checkId: { type: string },
+            label: { type: string },
+            status: { type: string, enum: [pass, fail, warn, info] },
+            severity: { type: string, enum: [low, medium, high] },
+            evidence: { type: string },
+            explanation: { type: string },
+          },
+      }
+    ScrutinyReport:
+      {
+        type: object,
+        required:
+          [
+            applicationId,
+            generatedAt,
+            extractedFields,
+            checks,
+            riskScore,
+            recommendation,
+            modelMeta,
+          ],
+        properties:
+          {
+            applicationId: { type: string },
+            generatedAt: { type: string, format: date-time },
+            extractedFields: { type: object },
+            checks:
+              {
+                type: array,
+                items: { $ref: "#/components/schemas/ScrutinyCheck" },
+              },
+            riskScore: { type: integer, minimum: 0, maximum: 100 },
+            recommendation:
+              {
+                type: string,
+                enum: [approve, request_info, manual_review, reject],
+              },
+            modelMeta:
+              {
+                type: object,
+                properties:
+                  {
+                    extractor: { type: string },
+                    adjudicator: { type: string },
+                    latencyMs: { type: integer },
+                    versions: { type: object },
+                  },
+              },
+          },
+      }
+    QueueItem:
+      {
+        type: object,
+        required: [applicationId, serviceId, status, riskScore, updatedAt],
+        properties:
+          {
+            applicationId: { type: string },
+            serviceId: { type: string },
+            status: { $ref: "#/components/schemas/AppStatus" },
+            riskScore: { type: integer },
+            updatedAt: { type: string, format: date-time },
+          },
+      }
+    Decision:
+      {
+        type: object,
+        required: [applicationId, decision, officerNotes],
+        properties:
+          {
+            applicationId: { type: string },
+            decision: { type: string, enum: [approve, reject, request_info] },
+            officerNotes: { type: string },
+          },
+      }
+    MetricsSummary:
+      {
+        type: object,
+        required:
+          [
+            applicationsTotal,
+            pending,
+            decided,
+            avgScrutinySeconds,
+            flagRate,
+            generatedAt,
+          ],
+        properties:
+          {
+            applicationsTotal: { type: integer },
+            pending: { type: integer },
+            decided: { type: integer },
+            avgScrutinySeconds: { type: number },
+            flagRate: { type: number },
+            evalPrecision: { type: number },
+            evalRecall: { type: number },
+            generatedAt: { type: string, format: date-time },
+          },
+      }

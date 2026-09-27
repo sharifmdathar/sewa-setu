@@ -1,0 +1,3 @@
+node_modules/ .next/ dist/ .venv/ __pycache__/ *.pyc .env .DS_Store
+services/pipeline/var/ eval/reports/*/ !eval/reports/.gitkeep
+data/synthetic/dataset-*/
