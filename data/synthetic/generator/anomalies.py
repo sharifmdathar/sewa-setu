@@ -71,9 +71,14 @@ def eligible_types(app: AppRecord) -> list[str]:
 def plant_name_mismatch(rng: random.Random, app: AppRecord) -> None:
     """One document carries a different personal name than the rest of the set."""
     doc = rng.choice(app.docs)
-    other = rng.choice(FIRST_NAMES_F + FIRST_NAMES_M)
-    surname = rng.choice([s for s in SURNAMES if s != doc.values.full_name.split()[-1]])
-    doc.values.full_name = f"{other} {surname}"
+    original = doc.values.full_name
+    for _ in range(8):
+        first = rng.choice(FIRST_NAMES_F + FIRST_NAMES_M)
+        candidate = f"{first} {rng.choice(SURNAMES)}"
+        if candidate != original:
+            doc.values.full_name = candidate
+            return
+    doc.values.full_name = f"{original} (variant)"
 
 
 def plant_expired_doc(rng: random.Random, app: AppRecord) -> None:
