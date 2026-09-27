@@ -57,7 +57,7 @@ flags reproduces it byte-for-byte.
 ```bash
 cd services/pipeline
 ruff check .        # All checks passed!
-python -m pytest -q # 154 passed, 2 skipped
+python -m pytest -q # all green (191 passed, 2 skipped at writing)
 ```
 
 The 2 skips are the live-LLM tests, which need `LLM_API_KEY`. Run pytest from
@@ -66,7 +66,7 @@ The 2 skips are the live-LLM tests, which need `LLM_API_KEY`. Run pytest from
 The eval harness has its own gate, run from the repository root:
 
 ```bash
-cd eval && ruff check . && python -m pytest -q && cd ..   # All checks passed! / 14 passed
+cd eval && ruff check . && python -m pytest -q && cd ..   # All checks passed! / 17 passed
 ```
 
 ## 5. Run the API

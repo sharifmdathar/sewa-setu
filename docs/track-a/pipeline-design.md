@@ -148,6 +148,12 @@ improving recall means richer scoring (A6 follow-up), not moving the goal posts.
   worker, or move to a real database (out of POC scope).
 - **Auth**: none, by design (SPEC §3 — production auth is out, the demo uses a role switcher).
   Every path is unauthenticated; do not expose this port.
+- **M4 is partly prepared, and unapplied.** `m4-pre-contract` (tag) marks the pre-apply state;
+  rollback is `git reset --hard m4-pre-contract`. CR-2's *code* half (queue returns all statuses)
+  is deliberately NOT landed on its own: it is schema-valid today, but the contract line
+  `description: pending apps w/ risk` would then describe behaviour that no longer happens, which
+  is the exact drift CR-2 exists to remove. Land code and description together, in the order
+  CR-2 -> CR-3 -> CR-1 from `docs/track-b/m4-contract-apply.md`.
 - **M4 is still unapplied.** `shared/contracts/openapi.yaml` is byte-identical to the scaffold
   freeze (verified `git log -1 -- shared/contracts/openapi.yaml`). The CR-1/2/3 hunks are recorded
   and pre-validated, but editing the contract needs the paired session - and while only one track
