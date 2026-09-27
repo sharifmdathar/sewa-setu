@@ -1,0 +1,10 @@
+# The eval harness is Track A code with no package manifest of its own. Without this file,
+# `ruff check .` inside eval/ picks up whatever configuration happens to resolve above the
+# repository, so the gate would mean something different here than it does in
+# services/pipeline. These settings mirror services/pipeline/pyproject.toml exactly.
+
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

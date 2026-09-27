@@ -1,0 +1,4 @@
+# Eval output is regenerable; only the harness itself is committed.
+reports/
+__pycache__/
+*.py[cod]
