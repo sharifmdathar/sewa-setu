@@ -43,7 +43,7 @@ cache are all asserted without an `LLM_API_KEY`.
 
 | Option | Verified today | Notes |
 | --- | --- | --- |
-| **NVIDIA NIM** `https://integrate.api.nvidia.com/v1` | Catalog readable without a key: 82 models, image input on `google/gemma-3-12b-it`, `microsoft/phi-3-vision-128k-instruct`, `meta/llama-3.2-11b-vision-instruct`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | Quota **not** verified — their limits page 404s and 2026 forum traffic is people asking for the free tier to be raised. Check the console after signup before planning a run. |
+| **NVIDIA NIM** `https://integrate.api.nvidia.com/v1` | **Key verified working, 2026-09-27.** Callable from this account: `meta/llama-3.2-11b-vision-instruct` (JSON mode + vision, ~1 s) and `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (~6 s). **Not** callable: `google/gemma-3-12b-it`, `google/gemma-3-4b-it`, `microsoft/phi-3-vision-128k-instruct` (404 "Not found for account"), `meta/llama-3.1-8b-instruct` (410 end-of-life), `deepseek-ai/deepseek-v4.1-flash` (timed out at 30 s) | `/v1/models` lists 82 models but it is a **catalog, not an entitlement** — probe before planning around a slug. Quota ceiling still unverified: check the console. |
 | **Google Gemini** `https://generativelanguage.googleapis.com/v1beta/openai` | The OpenAI-compatible route exists (it answered "Missing or invalid Authorization header", not 404) | Free tier includes image input; second-hand sources disagree on the ceiling (250–1,500 req/day), so treat a corpus pass as multi-day. |
 | **Local Ollama** `http://127.0.0.1:11434/v1` | Not installed here yet | The only option with no daily cap. This machine: RTX 3050 Ti, **4 GB VRAM**, 15 GB RAM — fine for a 3–4 B text model, marginal for a VLM (expect 10–40 s per rendered document). |
 | **OpenRouter `:free`** | Their docs: 20 req/min, **50 req/day** at a $0 balance; 1,000/day only after buying $10 of credit. 10 free image-capable slugs today | Ruled out for a corpus pass (917 calls ÷ 50 = 19 days). Fine for the 20-document image leg. |
@@ -128,6 +128,42 @@ Now committed as tests, so this file is a description rather than a claim
 - `run_scrutiny` over HTTP yields five evidence-carrying checks and a `modelMeta` naming the
   *served* model, which is not necessarily the requested one on a router.
 
-What none of that covers: a real model's answer quality. The plumbing and the yardstick are both
-proven; the numbers from a real endpoint are still to be produced.
+## The first real endpoint numbers (2026-09-27)
+
+20 rendered documents through `meta/llama-3.2-11b-vision-instruct`, against the control's 1.00/1.00:
+
+| | control (template) | live VLM |
+| --- | --- | --- |
+| Field recall | 1.00 | **0.86** (107 of 124 stated values) |
+| Field precision | 1.00 | **0.98** (107 of 109 answered) |
+| Documents read completely | 20 of 20 | **5 of 20** |
+| Time per document | — | p50 2.8 s, p95 18.2 s, max 23.8 s |
+
+The failure is **not uniform, and that is the useful part**: `docType`, `name`, `idNumber` and
+`issueDate` were all read at 1.00, while `expiryDate` was read on 4 of the 18 documents that state
+one. The model reads the head of a page and drops the tail. Precision 0.98 against recall 0.86 says
+it omits rather than invents — which is the dangerous direction here, because C2 can only fail a
+document whose expiry it was given. That is why C2 now warns when a document of an expiring type
+states no expiry (`rules.yaml -> expiryExpectedDocTypes`), instead of reading silence as validity.
+
+Two consequences for the submission: at the corpus mean of 4.6 documents per application, p50 is
+~13 s and p95 is ~83 s — **SPEC §2's "< 60 s" holds at p50 and breaches at p95**; and the 23.8 s
+worst observation sits close to the 30 s call timeout, so a slow document can fail a run outright.
+
+What this still does not cover: a real scan. These are clean rendered documents, so everything
+above is a ceiling, not an expectation, on phone-photo input.
+
+## The trap that costs the most time
+
+`services/pipeline/.env` is **not read by anything** — there is no dotenv loader, deliberately. The
+file is a place to keep the values; they only exist once they are in the process environment:
+
+```bash
+set -a; . services/pipeline/.env; set +a
+```
+
+Without that, `LLM_API_KEY` is unset, `default_extractor()` returns the template parser, and every
+"live" run reports rules-only numbers while looking exactly like it succeeded. The reports say
+which path ran (`rules-only` vs `live model leg`), which is the only reason this fails loudly
+rather than quietly.
 

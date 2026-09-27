@@ -115,6 +115,14 @@ requests, and a 429 was absorbed by the SDK's blind backoff before this loop cou
 counts over a socket — it is how the squaring was found, and it is what keeps the model path tested
 without an `LLM_API_KEY`.
 
+**C2 warns on an expiry it could not read, instead of passing.** C2 could only ever fail a document
+whose `expiry_date` it was given, so a dropped read was indistinguishable from a valid document.
+Measured on the live leg that is not an edge case: a VLM read `expiryDate` on 4 of the 18 documents
+that state one. `rules.yaml -> expiryExpectedDocTypes` (every type but `fee_receipt`, which never
+expires) turns a missing read into a `warn` that names the file. On the template path no document
+ever lacks an expiry it states, so the gate is unchanged — precision 1.00, recall 1.00, risk-flag
+recall 0.540 — and the new warning fires only where a model failed to read.
+
 ## Eval summary
 
 Pasted from `eval/reports/2026-09-27T15-55-07/report.md` (regenerate with

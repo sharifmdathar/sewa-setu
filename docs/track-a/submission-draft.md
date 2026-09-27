@@ -52,10 +52,12 @@ and over a real socket); synthetic data only.
 - **P2** — scale and multilingual, which the store was never designed for (see §6).
 
 **Risks worth stating rather than hiding:** OCR quality on low-resolution scans (the image leg has
-never met a real scan), LLM cost and approval latency (a per-document budget of
-`max_retries + 1` calls exists, a cost ceiling does not), and change management for officers — the
-queue's ordering is the thing they will argue with, and a 0.54 risk-flag recall gives them reason
-to.
+never met a real scan — only clean text rendered to a PNG, and even that a live VLM read only 86%
+of, with the misses concentrated in the last lines of the page), LLM cost and approval latency (a
+per-document budget of `max_retries + 1` calls exists, a cost ceiling does not; measured p95 is
+18.2 s per document, which is what puts the 60 s target in play), and change management for
+officers — the queue's ordering is the thing they will argue with, and a 0.54 risk-flag recall
+gives them reason to.
 
 ## 4. Prototype evidence
 
@@ -69,15 +71,20 @@ with planted anomalies, seed 42, as of 2026-06-30:
 | Application risk-flag recall | n/a | 0.54 (precision 1.00, accuracy 0.89) | disclosed, not gated |
 | Scrutiny time / application | 12–18 min | see below | < 60 s |
 
-Latency at three levels, because the honest answer depends on which one is being asked about:
+Latency at four levels, because the honest answer depends on which one is being asked about:
 
 | What was timed | Result | Source |
 | --- | --- | --- |
 | Pipeline in-process, offline, no HTTP, no store | 0.11 ms mean / 0.30 ms worst per application | eval report |
-| The officer's actual wait: `POST .../scrutiny/run` over HTTP, store writes included | **p50 3.0 ms, p95 3.2 ms, max 3.7 ms** (100 runs / 20 apps); 5.6 ms on the first call after a cold start | `pipeline.scripts.bench_scrutiny` |
+| The officer's actual wait on the rules-only path: `POST .../scrutiny/run` over HTTP, store writes included | **p50 3.0 ms, p95 3.2 ms, max 3.7 ms** (100 runs / 20 apps); 5.6 ms on the first call after a cold start | `pipeline.scripts.bench_scrutiny` |
 | Same route with the server's own clock | 1.1–1.3 ms, so ~1.8 ms of the client figure is HTTP, JSON and the write | `/metrics/summary` |
+| **One document through a live VLM** (`meta/llama-3.2-11b-vision-instruct`) | p50 2.8 s, p95 18.2 s, max 23.8 s. At the corpus mean of 4.6 documents per application that is **~13 s at p50 and ~83 s at p95** | `eval/reports/image-leg/2026-09-27T21-06-19` |
 
-**Quote the middle row.** The 0.11 ms figure is real but it is not what anyone waits for.
+**Quote the second row for what this POC runs today, and the fourth for what a model in the loop
+costs.** The 0.11 ms figure is real but it is not what anyone waits for. And the fourth row is the
+one that puts SPEC §2's "< 60 s" in question rather than comfortably met: at p95 the model path
+breaches it, and the 23.8 s worst observation sits close to the 30 s call timeout, so a slow
+document can fail the run rather than merely delay it.
 
 ### Read-back accuracy, measured separately from judgement
 
@@ -86,13 +93,20 @@ Latency at three levels, because the honest answer depends on which one is being
 precision (an invented value counts against the model, a blank one does not) and the
 whole-document clean-read rate.
 
-| Reader | Documents | Stated values | Correct | Clean reads |
-| --- | --- | --- | --- | --- |
-| deterministic template parser — the control, no model | 20 | 124 | 124 (recall 1.00, precision 1.00) | 20 of 20 |
-| VLM over the same PNGs | *pending an endpoint* | | | |
+| Reader | Documents | Stated values | Correct | Clean reads | Time / document |
+| --- | --- | --- | --- | --- | --- |
+| deterministic template parser — the control, no model | 20 | 124 | 124 (recall 1.00, precision 1.00) | 20 of 20 | — |
+| `meta/llama-3.2-11b-vision-instruct` over the same PNGs | 20 | 124 | 107 (**recall 0.86, precision 0.98**) | 5 of 20 (25%) | p50 2.8 s, p95 18.2 s |
 
 The control row earns its place by being boring: it shows the yardstick and the ground truth
-agree, so whatever the model row says afterwards differs for reasons about the model.
+agree, so anything the model row says afterwards differs for reasons about the model.
+
+**Where the model actually fails is not uniform.** `docType`, `name`, `idNumber` and `issueDate`
+are each read at 1.00 — every identity field that C1 and C4 depend on. What collapses is
+`expiryDate`: stated on 18 documents, answered on 4, recall 0.22. The model reads the head of a
+page and drops the tail. Precision 0.98 confirms the direction: it almost never invents a value,
+it omits one — which is the quieter and therefore more dangerous failure, because an omitted
+expiry date reads as a document that cannot be expired.
 
 ## 5. Acceptance criteria (SPEC §8) status
 
@@ -106,12 +120,19 @@ agree, so whatever the model row says afterwards differs for reasons about the m
 
 ## 6. Limits a reviewer will find if they dig
 
-- **The model leg has never met a real model.** Every scored number above is the rules-only leg:
-  template extraction, deterministic adjudication. The VLM path was verified end-to-end against a
-  local stand-in endpoint that 429s on purpose (666 ms/application mean over `--limit 2`,
-  `docs/track-a/live-model-leg.md`). That number is plumbing, not a vendor's latency or accuracy,
-  and the submission should not let it read as either. The read-back yardstick in §4 exists and its
-  control passes; the model row of that table is the one still empty.
+- **The model leg has met a real model, and the honest numbers are worse than the table above.**
+  Every scored number in §4 is still the rules-only leg: template extraction, deterministic
+  adjudication. Over 20 rendered documents a live VLM read **107 of 124** stated field values
+  (recall 0.86, precision 0.98) and completed only **5 of 20** documents without an omission, at
+  p50 2.8 s / p95 18.2 s per document. Two consequences are carried through this draft rather than
+  footnoted: the "< 60 s" claim of SPEC §2 holds at p50 (~13 s for a 4.6-document application) and
+  **breaches at p95** (~83 s); and the field the model drops most (`expiryDate`, read on 4 of the
+  18 documents that state it) is precisely the input C2 needs — which is why C2 now warns instead
+  of passing when an expiring document states no expiry date.
+- **The rules-only gate is unaffected by that change, and that is the point.** Re-running
+  `python -m eval.runner` after the C2 change reproduces precision 1.00 / recall 1.00 / risk-flag
+  recall 0.540 exactly: on the template path no document ever lacks an expiry it states, so the
+  new warning fires only where a model failed to read one.
 - **Risk-flag recall is 0.54 at the spec-pinned threshold of 60**, because single-anomaly
   applications score 40–50. The threshold is fixed by SPEC §7, so it was not tuned to flatter the
   metric. Per-check fail-flag precision and recall are both 1.00 — that is what the gate measures.
@@ -130,6 +151,7 @@ agree, so whatever the model row says afterwards differs for reasons about the m
 | 200 apps / 917 docs / 50 anomalies / seed 42 | `python -m generator --n 200 --anomaly-rate 0.25 --seed 42` (SPEC §6) |
 | 247 + 32 tests, ruff clean | `ruff check .` + `pytest -q` in `services/pipeline` and `eval` |
 | read-back control (124/124, 20 of 20) | `python -m eval.image_leg --reader text` → `eval/reports/image-leg/<ts>/image_leg.md` |
+| live VLM read-back (107/124, 5 of 20, p50 2.8 s) | `LLM_MODEL=meta/llama-3.2-11b-vision-instruct python -m eval.image_leg` → `eval/reports/image-leg/2026-09-27T21-06-19/` |
 | 666 ms stand-in leg | `docs/track-a/live-model-leg.md`, verified with `eval.runner --limit 2` against a local fake |
 | demo beats and payloads | `docs/track-a/i4-demo-rehearsal.md` (two passes, same store recipe) |
 
