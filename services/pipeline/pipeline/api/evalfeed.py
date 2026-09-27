@@ -61,6 +61,32 @@ def newest_eval_report(reports_dir: Path = EVAL_REPORTS_DIR) -> Path | None:
     return max(candidates, key=lambda report: (_report_clock(report), str(report)))
 
 
+def judged_nothing(payload: dict) -> bool:
+    """True when a run had nothing at stake: no planted check failures, and none predicted.
+
+    `eval.runner --limit 2` over a slice with no anomaly reports precision 1.00 and recall 1.00
+    built on zero evidence, and both numbers are otherwise indistinguishable from the real thing.
+    That is enough to pass the SPEC §7 gate and to headline the dashboard, so the two readers ask
+    this question together - `eval/gate.py` treats it as a breach, `/metrics/summary` as no news.
+
+    A report that does not say gets no opinion here: the fields still have to be numbers, and
+    "the report does not say what it judged" is the gate's complaint, not a reason to drop a
+    dashboard field that a hand-written report never had.
+    """
+    flags = payload.get("failFlags")
+    if not isinstance(flags, dict):
+        return False
+    planted, predicted = flags.get("support"), flags.get("predicted")
+    if not (_is_number(planted) and _is_number(predicted)):
+        return False
+    return int(planted) == 0 and int(predicted) == 0
+
+
+def _is_number(value: object) -> bool:
+    """A real number, and a bool is not one - `True` would read as a count of one."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def latest_eval_metrics(directory: Path | None = None) -> dict[str, float]:
     """evalPrecision / evalRecall from the newest eval report, if one ran and said both.
 
@@ -87,6 +113,15 @@ def latest_eval_metrics(directory: Path | None = None) -> dict[str, float]:
         if isinstance(payload.get(key), (int, float)) and not isinstance(payload.get(key), bool)
     }
     missing = [key for key in EVAL_KEYS if key not in numbers]
+    if judged_nothing(payload):
+        warning(
+            LOGGER,
+            "eval report judged nothing",
+            path=str(report),
+            applications=payload.get("dataset", {}).get("applications"),
+            planted=payload.get("failFlags", {}).get("support"),
+        )
+        return {}
     if missing:
         warning(
             LOGGER,

@@ -186,6 +186,11 @@ python -m eval.gate; echo $?    # 0 = PASS, 1 = threshold breach, 2 = no report 
 leaving the table to be interpreted. Current result on dataset-v1: fail-flag precision 1.00 /
 recall 1.00 (targets 0.90 / 0.85), mean ~0.1 ms per application offline.
 
+`--limit N` checks the plumbing; it is not an acceptance run. A slice that planted no check
+failures reports precision 1.00 and recall 1.00 built on zero evidence - `--limit 2` on dataset-v1
+does exactly that - so the gate calls it a breach ("the run judged nothing", exit 1) and
+`/metrics/summary` serves neither eval key rather than quoting it.
+
 `avgScrutinySeconds` is measured per application at the route (intake, extraction, rules,
 adjudication, scoring, persistence) and kept in the store as `scrutinyMs`, which never goes on the
 wire. It is not read from `modelMeta.latencyMs`: that field is an integer millisecond per the
@@ -194,8 +199,8 @@ live on the demo slice: ~0.2 ms of pipeline work, ~5 ms mean per `POST .../scrut
 
 `GET /metrics/summary` reads `evalPrecision` / `evalRecall` from the newest
 `eval/reports/<ts>/report.json` - the same newest-run rule `eval.gate` uses, so the dashboard and
-the gate can never quote different runs - and omits both keys when no eval has run or the numbers
-are unreadable (they are optional on the contract, and absent beats wrong). Nothing about them is
+the gate can never quote different runs - and omits both keys when no eval has run, the numbers are
+unreadable, or the run judged nothing (they are optional on the contract, and absent beats wrong). Nothing about them is
 hardcoded: replace the newest report's numbers and the endpoint answers differently.
 
 ## 10. Where things live, and how to reset

@@ -18,7 +18,7 @@ Written at the end of A9. Prompts A1–A9 are committed on `track-a`; this is th
 | `pipeline/store/` | `JsonStore` | one JSON file per record, atomic replace, process-wide lock |
 | `pipeline/api/` | `create_app(store_root)` | the ten contract paths, service catalog, application state machine, queue, metrics |
 | `pipeline/api/readmodel.py` | `queue_items`, `metrics`, `open_count` | the two read paths as pure functions over records + a report lookup: CR-2's queue, CR-3's series, the one definition of "open" |
-| `pipeline/api/evalfeed.py` | `newest_eval_report`, `latest_eval_metrics` | reads the harness's newest `report.json` once, shared by `/metrics/summary` and `eval.gate` |
+| `pipeline/api/evalfeed.py` | `newest_eval_report`, `latest_eval_metrics`, `judged_nothing` | reads the harness's newest `report.json` once, shared by `/metrics/summary` and `eval.gate`, and screens runs that planted nothing to judge |
 | `pipeline/logs.py` | `configure`, `event`, `warning` | one JSON object per line, context-carrying |
 | `eval/` | `python -m eval.runner`, `python -m eval.gate` | offline pass over dataset-v1 vs ground truth, `report.{json,md}`, SPEC threshold gate |
 
@@ -147,6 +147,14 @@ against, and its labels come from which field the generator perturbed — so 1.0
 nothing else. It does not measure extraction robustness: nothing here exercises the VLM path,
 because `LLM_API_KEY` was unavailable in every session (the 2 skipped tests are exactly that
 branch).
+
+**A run that judged nothing cannot pass the gate.** `eval.runner --limit 2` over dataset-v1 plants
+no check failure, and with 0 true, 0 false and 0 missed both ratios come out 1.00 - numerically
+indistinguishable from the 200-application run, so it satisfied SPEC §7 by proving nothing. The
+gate now treats 0 planted *and* 0 predicted as a breach and says so; `pipeline/api/evalfeed.py`
+exports the same predicate, which is why a partial run also stops feeding `evalPrecision` /
+`evalRecall` to the dashboard instead of headlining a vacuous 1.00. `--limit` remains useful for
+plumbing - it is how the model leg was verified - it just no longer counts as acceptance.
 
 The gap to close in integration is the OCR/VLM step: on real scanned documents the interesting
 failure mode is a missing or misread field, which lands in C3/C1 as `info`/`fail` and would move

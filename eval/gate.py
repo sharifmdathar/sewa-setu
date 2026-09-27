@@ -3,8 +3,9 @@
     python -m eval.gate [--dir eval/reports]
 
 Judges the newest report the runner wrote. It fails on exactly the two thresholds the spec
-names - fail-flag precision and recall - and prints the rest (risk-flag numbers, latency) for
-context without gating on it.
+names - fail-flag precision and recall - plus the precondition both assume, that the run had
+something to judge. The rest (risk-flag numbers, latency) is printed for context without gating
+on it.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from pipeline.api.evalfeed import newest_eval_report
+from pipeline.api.evalfeed import judged_nothing, newest_eval_report
 
 from eval.runner import DEFAULT_OUT, PRECISION_TARGET, RECALL_TARGET
 
@@ -37,8 +38,20 @@ def latest_report(reports_dir: Path) -> Path | None:
 
 
 def violations(payload: dict[str, Any]) -> list[str]:
-    """The spec's two thresholds, as human-readable complaints."""
+    """The spec's two thresholds, as human-readable complaints, plus the precondition they assume.
+
+    Precision and recall are ratios over planted check failures. On a sample that planted none -
+    `--limit 2` over the first two applications of dataset-v1, say - both ratios come out at 1.00
+    with 0 true, 0 false and 0 missed, and a gate that only compares numbers to thresholds calls
+    that a pass. It is not: nothing was judged, so nothing was proven.
+    """
     found: list[str] = []
+    if judged_nothing(payload):
+        found.append(
+            f"the run judged nothing: 0 planted and 0 predicted check failures across "
+            f"{payload['dataset']['applications']} applications - precision and recall would be "
+            "vacuous. Run `python -m eval.runner` without --limit."
+        )
     precision = float(payload["evalPrecision"])
     recall = float(payload["evalRecall"])
     if precision < PRECISION_TARGET:

@@ -203,6 +203,35 @@ def test_the_gate_fails_and_says_which_number_breached(
     assert "recall 0.400" in printed and "FAIL" in printed
 
 
+def test_a_run_that_judged_nothing_is_a_breach_not_a_pass(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--limit 2` over a clean slice reports 1.000 / 1.000 built on no evidence at all."""
+    vacuous = report_payload(precision=1.0, recall=1.0)
+    vacuous["dataset"] = {**vacuous["dataset"], "applications": 2, "anomalous": 0}
+    vacuous["failFlags"] = {
+        **vacuous["failFlags"],
+        "truePositive": 0,
+        "falsePositive": 0,
+        "falseNegative": 0,
+        "support": 0,
+        "predicted": 0,
+    }
+    write_run(tmp_path, vacuous)
+
+    assert gate_main(["--dir", str(tmp_path)]) == BREACH_EXIT
+    printed = capsys.readouterr().out
+    assert "judged nothing" in printed and "without --limit" in printed
+
+
+def test_nothing_planted_is_only_vacuous_when_nothing_was_predicted() -> None:
+    """A clean sample the pipeline still raised an alarm on is a real precision failure."""
+    payload = report_payload(precision=0.0, recall=1.0)
+    payload["failFlags"] = {**payload["failFlags"], "support": 0, "predicted": 3}
+
+    assert violations(payload) == ["fail-flag precision 0.000 is below the required 0.90"]
+
+
 def test_a_missing_report_is_not_a_pass(tmp_path: Path) -> None:
     assert gate_main(["--dir", str(tmp_path)]) == MISSING_EXIT
     assert latest_report(tmp_path) is None

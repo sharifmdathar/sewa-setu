@@ -49,6 +49,34 @@ def capture_warnings() -> Any:
     logger.removeHandler(handler)
 
 
+def test_a_report_that_judged_nothing_serves_no_dashboard_numbers(
+    tmp_path: Path, capture_warnings: list[logging.LogRecord]
+) -> None:
+    """A `--limit 2` run reports 1.00/1.00 from no evidence; the dashboard must not quote it."""
+    write_report(
+        tmp_path,
+        "2026-09-27T09-00-00",
+        {
+            **NEWER,
+            "dataset": {"applications": 2},
+            "failFlags": {"support": 0, "predicted": 0},
+        },
+    )
+
+    assert latest_eval_metrics(tmp_path) == {}
+    assert "eval report judged nothing" in [record.getMessage() for record in capture_warnings]
+
+
+def test_a_report_that_measured_serves_its_numbers(tmp_path: Path) -> None:
+    write_report(
+        tmp_path,
+        "2026-09-26T09-30-00",
+        {**NEWER, "dataset": {"applications": 200}, "failFlags": {"support": 78, "predicted": 74}},
+    )
+
+    assert latest_eval_metrics(tmp_path) == {"evalPrecision": 0.94, "evalRecall": 0.88}
+
+
 def test_the_newest_run_wins_even_when_its_directory_name_sorts_first(
     tmp_path: Path,
 ) -> None:
