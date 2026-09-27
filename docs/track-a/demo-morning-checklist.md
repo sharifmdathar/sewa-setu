@@ -3,6 +3,30 @@
 Order matters. Steps 1 and 2 are the two ways this demo fails silently: a server running old code,
 and a model in the loop turning a 3 ms call into a multi-second one.
 
+## 0. Known UI defect: the Applicant column will read "—" for every row
+
+Found overnight by running the officer queue against the real API. It is a **Track B** one-liner,
+not an API problem, and it is visible in the queue you will show at 2:30.
+
+The queue reads the applicant's name as `applicantFields["applicantName"]`
+(`apps/web/src/app/officer/page.tsx`, `nameOf`). The real API sends **`fullName`** — that is the key
+`pipeline/api/catalog.py` declares for all three services. So in mock mode the column fills, and in
+real mode every row shows `—`.
+
+Verified: `GET /applications/APP-0001` → `applicantFields` has `fullName: "Anita Lohar"`, no
+`applicantName`; the mock fixtures declare `applicantName`.
+
+**Fix for Track B:** read the name field the catalog declares (or fall back across
+`fullName`/`applicantName`) rather than hardcoding one key.
+
+**For the recording if it is not fixed in time:** the column is cosmetic — every other part of the
+row (id, service, status, risk, updated) is real. Either say nothing and let the officer open a
+report (where the name appears correctly), or hide the column for the take.
+
+Why the conformance suite did not catch it: `applicantFields` is declared as a bare
+`{ type: object }` in the contract, so **no key name inside it is checkable**. That is the real
+gap, and `docs/change-requests/CR-5.md` proposes closing it.
+
 ## 1. Make sure the API is running current code
 
 A uvicorn has been left on `127.0.0.1:8000` for the Track B human. If it has been up since before
