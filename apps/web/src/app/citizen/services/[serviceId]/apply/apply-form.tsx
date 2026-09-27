@@ -40,7 +40,7 @@ export function ApplyForm({
               inputMode="numeric"
               min={0}
               required={def.required}
-              className="min-h-12 w-full rounded-md border border-zinc-300 px-3 py-3 text-base focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              className="min-h-12 w-full rounded-md border border-zinc-300 px-3 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           ) : (
             <input
@@ -48,14 +48,14 @@ export function ApplyForm({
               name={name}
               type={def.type === "date" ? "date" : "text"}
               required={def.required}
-              className="min-h-12 w-full rounded-md border border-zinc-300 px-3 py-3 text-base focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              className="min-h-12 w-full rounded-md border border-zinc-300 px-3 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           )}
         </div>
       ))}
       <button
         type="submit"
-        className="min-h-12 w-full rounded-md bg-zinc-900 px-5 py-3 text-base font-semibold text-white hover:bg-zinc-700"
+        className="min-h-12 w-full rounded-md bg-brand-600 px-5 py-3 text-base font-semibold text-white hover:bg-brand-700"
       >
         Submit application
       </button>

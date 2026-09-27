@@ -32,7 +32,7 @@ export function DecisionPanel({
         rows={3}
         defaultValue=""
         disabled={disabled}
-        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50"
+        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-zinc-50"
       />
       <div className="grid grid-cols-1 gap-2">
         {BUTTONS.map((b) => (

@@ -65,7 +65,7 @@ export function ApplicationsByDayChart({ data }: { data: DayCount[] }) {
           <XAxis dataKey="date" tickFormatter={(d: string) => d.slice(5)} fontSize={12} stroke="#71717a" />
           <YAxis allowDecimals={false} fontSize={12} stroke="#71717a" />
           <Tooltip formatter={(v: unknown) => [String(v), "apps"]} />
-          <Bar dataKey="count" fill="#18181b" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="count" fill="#4f46e5" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>

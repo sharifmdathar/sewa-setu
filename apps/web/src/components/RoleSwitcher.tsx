@@ -41,7 +41,7 @@ export function RoleSwitcher() {
           href={r.href}
           aria-pressed={role === r.id}
           onClick={() => setRole(r.id)}
-          className={`min-h-12 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+          className={`inline-flex min-h-12 items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition-colors ${
             role === r.id
               ? "bg-brand-600 text-white shadow-sm"
               : "text-zinc-600 hover:bg-brand-50 hover:text-brand-700"

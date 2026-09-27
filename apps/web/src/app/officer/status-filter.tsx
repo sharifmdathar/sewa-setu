@@ -39,7 +39,7 @@ export function StatusFilter({
 
   return (
     <details className="relative">
-      <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 hover:border-zinc-900 [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 hover:border-brand-500 [&::-webkit-details-marker]:hidden">
         Status: {count} of {options.length}
         <span aria-hidden="true" className="text-zinc-400">
           ▾
@@ -49,7 +49,7 @@ export function StatusFilter({
         <button
           type="button"
           onClick={toggleAll}
-          className="mb-2 min-h-10 w-full rounded-md border border-zinc-300 px-3 text-xs font-medium text-zinc-700 hover:border-zinc-900"
+          className="mb-2 min-h-10 w-full rounded-md border border-zinc-300 px-3 text-xs font-medium text-zinc-700 hover:border-brand-500"
         >
           {allChecked ? "Deselect all" : "Select all"}
         </button>
@@ -66,7 +66,7 @@ export function StatusFilter({
                 value={s}
                 defaultChecked={selected.includes(s)}
                 onChange={sync}
-                className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500"
               />
               {s}
             </label>

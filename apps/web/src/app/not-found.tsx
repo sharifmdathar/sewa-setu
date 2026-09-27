@@ -13,7 +13,7 @@ export default function NotFound() {
             action={
                 <Link
                     href="/"
-                    className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white"
+                    className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
                 >
                     Back to start
                 </Link>

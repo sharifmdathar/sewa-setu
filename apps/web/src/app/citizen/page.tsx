@@ -20,13 +20,13 @@ export default async function CitizenHomePage() {
           <li key={s.id}>
             <Link
               href={`/citizen/services/${s.id}/apply`}
-              className="block min-h-12 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-zinc-900"
+              className="block min-h-12 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-brand-500 hover:shadow-card"
             >
               <span className="block text-lg font-semibold">{s.name}</span>
               <span className="mt-1 block text-sm text-zinc-500">
                 Documents needed: {s.requiredDocTypes.join(", ")}
               </span>
-              <span className="mt-3 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white">
+              <span className="mt-3 inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white">
                 Apply now
               </span>
             </Link>
