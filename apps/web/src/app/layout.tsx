@@ -30,13 +30,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col bg-zinc-50 text-zinc-900 antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col bg-zinc-50 font-sans text-zinc-900 antialiased`}
       >
-        <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-2">
-            <Link href="/" className="text-base font-bold tracking-tight">
-              Sewa Setu{" "}
-              <span className="font-normal text-zinc-500">Scrutiny POC</span>
+        <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/85 shadow-sm backdrop-blur">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-2.5">
+            <Link href="/" className="flex items-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white shadow-card"
+              >
+                S
+              </span>
+              <span className="text-base font-bold tracking-tight">
+                Sewa Setu{" "}
+                <span className="font-normal text-zinc-400">· Scrutiny POC</span>
+              </span>
             </Link>
             <RoleSwitcher />
           </div>

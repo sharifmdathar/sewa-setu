@@ -22,7 +22,7 @@ const SEVERITY: Record<ScrutinyCheck["severity"], string> = {
 
 export function CheckList({ checks }: { checks: ScrutinyCheck[] }) {
   return (
-    <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 bg-white">
+    <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 bg-white shadow-card">
       {checks.map((c) => {
         const s = CHECK_STATUS[c.status];
         return (

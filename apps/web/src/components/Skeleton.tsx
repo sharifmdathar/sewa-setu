@@ -16,7 +16,7 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
         <div
             role="status"
             aria-label="Loading"
-            className="space-y-3 rounded-lg border border-zinc-200 bg-white p-5"
+            className="space-y-3 rounded-lg border border-zinc-200 bg-white p-5 shadow-card"
         >
             <SkeletonLine w="w-1/3" />
             {Array.from({ length: rows }, (_, i) => (

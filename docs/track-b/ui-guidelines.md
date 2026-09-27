@@ -62,6 +62,10 @@ journeys (J1/J3/J4) and §5 explainability (every check shows evidence + explana
   - red = fail / reject (fail, high risk)
   - blue = info / neutral (info, decided, documents_uploaded)
   - Colour is never the only signal — every badge pairs colour with text.
+- **Brand accent (indigo, `brand-*` tokens)**: reserved for primary actions,
+  active navigation, links, and focus rings only — it never encodes status.
+  Status semantics keep the fixed green/amber/red/blue map above, so a coloured
+  CTA is always an affordance, never a verdict.
 - **Risk bands**: low < 30 (green), medium 30–59 (amber), high ≥ 60 (red) —
   60 = the eval flag threshold (SPEC §7), so UI and eval agree.
 - **Data path**: components render data typed by `src/lib/api/types.ts`; fetched
