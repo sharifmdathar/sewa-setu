@@ -16,25 +16,51 @@ const ALIASES: Record<string, FieldDef["type"]> = {
   text: "text",
   date: "date",
   number: "number",
+  integer: "number",
+  int: "number",
+  float: "number",
+  decimal: "number",
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** fieldSchema (contract: object) -> ordered list of renderable fields. */
+/** "aadhaarNumber" -> "Aadhaar Number" (label when the schema gives none). */
+function humanizeLabel(key: string): string {
+  const spaced = key
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * fieldSchema (contract: free-form object) -> ordered renderable fields.
+ * Handles both shapes seen in the wild:
+ *  - flat (real API):   { fieldName: "string" | "date" | "integer" | ... }
+ *  - structured (mock): { fieldName: { type, label, required } }
+ * Unknown types are skipped (forward-compatible), never crash.
+ */
 export function parseFieldSchema(schema: unknown): { name: string; def: FieldDef }[] {
   if (!isRecord(schema)) return [];
   const out: { name: string; def: FieldDef }[] = [];
   for (const [name, raw] of Object.entries(schema)) {
+    // Flat shape: value is the type string.
+    if (typeof raw === "string") {
+      const t = ALIASES[raw.toLowerCase()];
+      if (!t) continue;
+      out.push({ name, def: { type: t, label: humanizeLabel(name), required: true } });
+      continue;
+    }
+    // Structured shape: value is { type, label?, required? }.
     if (!isRecord(raw)) continue;
     const t = ALIASES[String(raw.type ?? "").toLowerCase()];
-    if (!t) continue; // unknown field type -> skip (forward-compatible)
+    if (!t) continue;
     out.push({
       name,
       def: {
         type: t,
-        label: typeof raw.label === "string" && raw.label ? raw.label : name,
+        label: typeof raw.label === "string" && raw.label ? raw.label : humanizeLabel(name),
         required: raw.required === true,
       },
     });
