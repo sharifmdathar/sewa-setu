@@ -185,8 +185,11 @@ no longer be quoted against each other by mistake.
     at zero as well as at three.
   - **CR-1** `GET /applications/{id}/documents` → `Document[]` in upload order, no bytes on the
     wire, judged by the live conformance suite and the coverage guard.
-- **Track B's half of M4 is still open**: `types.ts` must declare the two series optional and the
-  dashboard must read its charts from `getMetrics` rather than bucketing `getQueue`.
+- **Track B's half of M4 has landed on their side**: `5f28901` carries `apps/web/src/lib/api/types.ts`
+  (+2, the two optional series) and `officer/dashboard/page.tsx` (+17/−6). Track A can prove its own
+  half only — the endpoint emits both series when there is data and omits them when there is not
+  (verified twice against a live server) — and cannot read `apps/web/**`, so which chart now reads
+  `getMetrics` is Track B's claim to check.
 - **I2 seed**: `tests/corpus.py` and `eval/dataset.py` both read dataset-v1 into pipeline shapes;
   the seeding step can reuse either, but application ids from the corpus are what the store will
   hold, so keep them (`Repository.create` mints its own ids for new submissions).
