@@ -18,6 +18,7 @@ from contract import assert_valid
 from corpus import corpus_or_rebuild
 
 from pipeline.api.repository import Repository
+from pipeline.rules import load_rule_config
 from pipeline.scripts import seed_demo
 
 
@@ -191,7 +192,7 @@ def test_the_seeded_store_populates_the_officer_queue_and_metrics(
     assert len(queue) == 20
     assert scores == sorted(scores, reverse=True)
     assert scores[0] == max(dict(seeded.high_risk).values() or scores)
-    metrics = store.metrics(flag_threshold=60, generated_at=dataset_today())
+    metrics = store.metrics(load_rule_config(), generated_at=dataset_today())
     assert metrics["applicationsTotal"] == 20
     assert metrics["pending"] == 20 and metrics["decided"] == 0
     assert metrics["flagRate"] == round(len(seeded.high_risk) / 20, 3)
