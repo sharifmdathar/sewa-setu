@@ -92,7 +92,8 @@ def test_c2_warns_when_an_expiring_document_type_states_no_expiry() -> None:
 
     assert result.status == "warn"
     assert "expiry date" in result.evidence and "none could be read" in result.evidence
-    assert "not a passed one" in result.explanation
+    assert "validity is unproven" in result.explanation
+    assert "issuing authority" not in result.explanation, "wrong line for the officer to check"
 
 
 def test_c2_still_passes_a_document_type_that_never_expires() -> None:
@@ -103,8 +104,19 @@ def test_c2_still_passes_a_document_type_that_never_expires() -> None:
 def test_c2_warns_when_the_issuer_does_not_match() -> None:
     dodgy = make_doc("aadhaar", authority="Corner Shop Printers")
     result = check_document_validity(make_input([dodgy]), CONFIG)
+
     assert result.status == "warn"
     assert "Corner Shop Printers" in result.evidence
+    assert "issuing authority is missing or does not match" in result.explanation
+    assert "unproven" not in result.explanation, "the expiry was read; do not claim otherwise"
+
+
+def test_c2_names_both_causes_when_both_are_present() -> None:
+    both = make_doc("aadhaar", authority="Corner Shop Printers", expiry=None)
+    result = check_document_validity(make_input([both]), CONFIG)
+
+    assert result.status == "warn"
+    assert "unproven" in result.explanation and "issuing authority" in result.explanation
 
 
 # --- C3 completeness -----------------------------------------------------------------------------

@@ -123,7 +123,8 @@ def check_identity_match(data: ScrutinyInput, config: RuleConfig) -> ScrutinyChe
 def check_document_validity(data: ScrutinyInput, config: RuleConfig) -> ScrutinyCheck:
     """C2: dates must be internally possible and the document must not be expired."""
     problems: list[str] = []
-    warnings: list[str] = []
+    dating_gaps: list[str] = []
+    issuer_gaps: list[str] = []
     dated = 0
 
     for document in data.documents:
@@ -151,15 +152,15 @@ def check_document_validity(data: ScrutinyInput, config: RuleConfig) -> Scrutiny
         elif document.doc_type in config.expiry_expected_doc_types:
             # Silence here used to be indistinguishable from validity: an expiry the extractor
             # never read cannot fail the check, and on a model-read corpus it often was not read.
-            warnings.append(
+            dating_gaps.append(
                 f"{document.file_name}: {document.doc_type} is issued with an expiry date "
                 "but none could be read"
             )
         expected = config.authority_expectations.get(document.doc_type)
         if fields.issuing_authority is None:
-            warnings.append(f"{document.file_name}: no issuing authority could be read")
+            issuer_gaps.append(f"{document.file_name}: no issuing authority could be read")
         elif expected and expected.lower() not in fields.issuing_authority.lower():
-            warnings.append(
+            issuer_gaps.append(
                 f"{document.file_name}: authority '{fields.issuing_authority}' does not match "
                 f"the expected issuer '{expected}'"
             )
@@ -173,15 +174,28 @@ def check_document_validity(data: ScrutinyInput, config: RuleConfig) -> Scrutiny
             "At least one document is expired or carries impossible dates, so the supporting "
             "evidence is not currently valid.",
         )
-    if warnings:
+    if dating_gaps or issuer_gaps:
+        # Two different findings need two different sentences: telling an officer the issuer looks
+        # doubtful, when what happened is that no expiry could be read, sends them to the wrong
+        # line of the document.
+        reasons = []
+        if dating_gaps:
+            reasons.append(
+                "a document that is issued with an expiry date did not yield one, so its validity "
+                "is unproven rather than satisfied"
+            )
+        if issuer_gaps:
+            reasons.append(
+                "the issuing authority is missing or does not match the office that should have "
+                "signed it"
+            )
         return _build(
             "C2",
             config,
             "warn",
-            f"Dating or issuer concerns: {_quote(warnings)}.",
-            "The dates that were read are possible, but the dating is incomplete or the issuing "
-            "authority looks doubtful, so the document should be eyeballed before approval. An "
-            "unread expiry date is a check that has not happened, not a passed one.",
+            f"Dating or issuer concerns: {_quote(dating_gaps + issuer_gaps)}.",
+            "The dates that were read are possible, but " + ", and ".join(reasons)
+            + " - check the paper before approving.",
         )
     if dated == 0:
         return _build(
