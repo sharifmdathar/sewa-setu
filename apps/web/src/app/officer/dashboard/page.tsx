@@ -28,7 +28,12 @@ export default async function DashboardPage() {
   const dayData = metrics.applicationsByDay ?? appsByDay(pendingQueue);
   const riskData = metrics.riskDistribution ?? riskDistribution(pendingQueue);
   const avg = metrics.avgScrutinySeconds;
-  const avgLabel = avg < 1 ? `${Math.round(avg * 1000)} ms` : `${avg.toFixed(1)} s`;
+  const avgLabel =
+    avg < 0.001
+      ? "< 1 ms"
+      : avg < 1
+        ? `${Math.round(avg * 1000)} ms`
+        : `${avg.toFixed(1)} s`;
 
   return (
     <div className="space-y-6">
