@@ -49,6 +49,11 @@ def _settings(**overrides: Any) -> LlmSettings:
         "model": "stub-vlm",
         "timeout_seconds": 1,
         "max_retries": 2,
+        # Stubbed responses share one prompt, so an enabled cache would answer the next test
+        # from disk instead of from its own stub. Backoff is zero for the same reason: retries
+        # are what these tests assert, and waiting for them would only slow the suite down.
+        "cache_enabled": False,
+        "backoff_base_seconds": 0.0,
     }
     return LlmSettings(**{**values, **overrides})
 
@@ -107,7 +112,7 @@ def test_gives_up_after_the_configured_attempts() -> None:
     client = stub_client([_response("broken")])
     extractor = LLMExtractor(settings=_settings(max_retries=1), client=client)
 
-    with pytest.raises(ExtractionError, match="unusable LLM payload"):
+    with pytest.raises(ExtractionError, match="unusable extractor payload"):
         extractor.extract(_document())
 
     assert len(client.chat.completions.requests) == 2

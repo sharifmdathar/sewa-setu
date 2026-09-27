@@ -6,6 +6,7 @@ import argparse
 from typing import Any
 
 from generator import build_dataset, ground_truth, write_dataset
+from generator.render import write_image_leg
 
 
 def parser() -> argparse.ArgumentParser:
@@ -17,6 +18,14 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("--seed", type=int, default=42, help="deterministic RNG seed")
     cli.add_argument(
         "--out", type=str, default="data/synthetic/dataset-v1", help="output directory"
+    )
+    cli.add_argument(
+        "--png",
+        type=int,
+        default=0,
+        metavar="N",
+        help="also render N documents to docs_img/ as PNG for the vision leg "
+        "(needs pip install -e data/synthetic[images])",
     )
     return cli
 
@@ -33,6 +42,10 @@ def main(argv: list[str] | None = None) -> int:
         f"\n  fails by check: {counts['failByCheck']}"
         f"\n  anomalies: {counts['byAnomalyType']}"
     )
+    if args.png:
+        manifest = write_image_leg(apps, args.out, args.png)
+        types = sorted({entry["docType"] for entry in manifest["documents"]})
+        print(f"  rendered {manifest['count']} PNGs into {out}/docs_img across {len(types)} types")
     return 0
 
 

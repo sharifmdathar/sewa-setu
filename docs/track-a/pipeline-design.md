@@ -8,10 +8,12 @@ Written at the end of A9. Prompts A1–A9 are committed on `track-a`; this is th
 | Package | Entry point | Responsibility |
 | --- | --- | --- |
 | `pipeline/ingestion/` | `intake.stored_document`, `intake.to_content` | base64 upload → bytes → the record the store keeps and the `DocumentContent` extractors read; rejects undecodable uploads |
-| `pipeline/extraction/` | `TemplateExtractor`, `LLMExtractor` | `DocumentContent` → `ExtractedFields`. Template parses the synthetic `KEY: value` form; LLM path is a VLM over any OpenAI-compatible endpoint (JSON mode, 30 s, 2 retries, `CallMeta`) |
+| `pipeline/extraction/` | `TemplateExtractor`, `LLMExtractor` | `DocumentContent` → `ExtractedFields`. Template parses the synthetic `KEY: value` form; LLM path is a VLM over any OpenAI-compatible endpoint, via `pipeline/llmcall.py` |
 | `pipeline/rules/` | `run_rules(data, config)` | C1–C5 as pure functions over `ScrutinyInput`, tuned by `rules.yaml`; always exactly five checks, in order |
 | `pipeline/agent/` | `run_scrutiny(application, documents)` | the orchestrator: extract → rule → adjudicate ambiguous checks → score → `ScrutinyReport`. Also owns `sha256_of_content` |
 | `pipeline/agent/adjudicator.py` | `DeterministicAdjudicator`, `LLMAdjudicator` | settles `warn`/`info` checks into a final status plus officer-facing wording |
+| `pipeline/llmcall.py` | `complete_json`, `new_client` | the only code that reaches a model: backoff-and-retry on transport failures, JSON-mode demotion, cache-aware, one attempt budget for both components |
+| `pipeline/llmcache.py` | `ResponseCache`, `cache_for`, `combined_stats` | disk cache of completions under `var/llm-cache`, keyed by model + messages + JSON mode; a corrupt entry is a miss, never a failure |
 | `pipeline/fraud/` | `score_fraud(data, checks, config)` | five mechanical features → `riskScore` (0–100), recommendation, flagged, and the internal signal list |
 | `pipeline/store/` | `JsonStore` | one JSON file per record, atomic replace, process-wide lock |
 | `pipeline/api/` | `create_app(store_root)` | the ten contract paths, service catalog, application state machine, queue, metrics |
@@ -141,6 +143,13 @@ these numbers down. The risk-flag recall of 0.54 is the other honest weak point 
 applications score 40–50 and stay under the spec-pinned flag threshold of 60, which is why the
 queue's ordering by `riskScore` matters more than its cut-off. Threshold is fixed by SPEC §7, so
 improving recall means richer scoring (A6 follow-up), not moving the goal posts.
+
+**A live leg is now built and waiting on a key, not on code.** `docs/track-a/live-model-leg.md`
+covers the endpoint options, the runbook and what the rendered `docs_img/` corpus does and does
+not prove. The plumbing was verified against a local stand-in endpoint (a deliberate 429 was
+retried, 11 calls cached and re-served without a second request), and `eval/report_md.py` now
+titles each report `rules-only` or `live model leg` from the reports it measured, so the two can
+no longer be quoted against each other by mistake.
 
 ## State and what integration still needs
 

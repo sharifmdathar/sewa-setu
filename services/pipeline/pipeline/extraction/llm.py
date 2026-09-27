@@ -3,22 +3,26 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import Any
-
-from pydantic import ValidationError
 
 from pipeline.config import LlmSettings, get_llm_settings
 from pipeline.extraction.base import ExtractionError
 from pipeline.extraction.models import CallMeta, DocumentContent, ExtractedFields
 from pipeline.extraction.prompts import EXTRACTION_SYSTEM_PROMPT, extraction_user_prompt
+from pipeline.llmcall import (
+    EndpointNotConfigured,
+    ModelCallFailed,
+    complete_json,
+    new_client,
+)
 
 
 class LLMExtractor:
     """Reads documents through a vision-capable model.
 
-    The client is injected in tests; in production it is built lazily from the
-    LLM_* environment variables with a 30 s timeout and 2 SDK retries.
+    The client is injected in tests; in production it is built lazily from the LLM_*
+    environment variables. Backoff, the JSON-mode fallback and the disk cache all live in
+    `pipeline.llmcall`, shared with the adjudicator.
     """
 
     name = "llm-vlm"
@@ -33,56 +37,37 @@ class LLMExtractor:
         return self._last_meta
 
     def _ensure_client(self) -> Any:
-        if self._client is not None:
-            return self._client
-        if not self.settings.enabled:
-            raise ExtractionError("LLM_API_KEY is not set, so LLM extraction is unavailable")
-        from openai import OpenAI
-
-        self._client = OpenAI(
-            base_url=self.settings.base_url,
-            api_key=self.settings.api_key,
-            timeout=self.settings.timeout_seconds,
-            max_retries=self.settings.max_retries,
-        )
+        if self._client is None:
+            try:
+                self._client = new_client(self.settings)
+            except EndpointNotConfigured as exc:
+                raise ExtractionError(f"{exc}, so LLM extraction is unavailable") from exc
         return self._client
 
     def extract(self, document: DocumentContent) -> ExtractedFields:
         parts = self._content_parts(document)
         client = self._ensure_client()
-        last_error = "no response"
-
-        for attempt in range(1, self.settings.max_retries + 2):
-            started = time.perf_counter()
-            try:
-                response = client.chat.completions.create(
-                    model=self.settings.model,
-                    messages=[
-                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                        {"role": "user", "content": parts},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0,
-                )
-            except Exception as exc:  # openai raises many unrelated error types
-                raise ExtractionError(f"{document.file_name}: LLM call failed: {exc}") from exc
-
-            latency_ms = int(round((time.perf_counter() - started) * 1000))
-            try:
-                fields = self._to_fields(response, document)
-            except (json.JSONDecodeError, ValidationError, AttributeError, TypeError) as exc:
-                last_error = str(exc)
-                continue
-
-            self._last_meta = CallMeta(
+        try:
+            result = complete_json(
+                self.settings,
+                messages=[
+                    {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": parts},
+                ],
                 component="extractor",
-                model=getattr(response, "model", None) or self.settings.model,
-                latency_ms=latency_ms,
-                attempts=attempt,
+                parse=lambda content: self._to_fields(content, document),
+                client=client,
             )
-            return fields
+        except ModelCallFailed as exc:
+            raise ExtractionError(f"{document.file_name}: {exc}") from exc
 
-        raise ExtractionError(f"{document.file_name}: unusable LLM payload ({last_error})")
+        self._last_meta = CallMeta(
+            component="extractor",
+            model=result.model,
+            latency_ms=result.latency_ms,
+            attempts=result.attempts,
+        )
+        return result.value
 
     def _content_parts(self, document: DocumentContent) -> list[dict[str, Any]]:
         parts: list[dict[str, Any]] = [
@@ -102,9 +87,8 @@ class LLMExtractor:
             raise ExtractionError(f"{document.file_name}: nothing to send to the model")
         return parts
 
-    def _to_fields(self, response: Any, document: DocumentContent) -> ExtractedFields:
-        payload = json.loads(response.choices[0].message.content)
-        fields = ExtractedFields.model_validate(payload)
+    def _to_fields(self, content: str, document: DocumentContent) -> ExtractedFields:
+        fields = ExtractedFields.model_validate(json.loads(content))
         return fields.model_copy(
             update={
                 "raw_text": document.text or "",

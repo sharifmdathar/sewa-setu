@@ -2,9 +2,12 @@
 
     python -m eval.runner [--dataset PATH] [--out eval/reports] [--limit N]
 
-No HTTP and no model endpoint: the same `run_scrutiny` the API calls, on the same synthetic
-corpus, timed per application. Writes `eval/reports/<timestamp>/{report.json,report.md}`; the
-markdown is the file the submission quotes numbers from (SPEC.md section 8.2).
+By default this is fully offline: template extraction, deterministic adjudication, no HTTP. Set
+`LLM_API_KEY` (and `LLM_BASE_URL`/`LLM_MODEL`) and the same command runs the *live model leg*
+instead, because `run_scrutiny` picks its extractor and adjudicator from the environment - the
+report records which one it got, so the two legs can never be confused for each other. Writes
+`eval/reports/<timestamp>/{report.json,report.md}`; the markdown is the file the submission
+quotes numbers from (SPEC.md section 8.2).
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.agent import ScrutinyReport, run_scrutiny
+from pipeline.llmcache import combined_stats
 from pipeline.rules import RuleConfig, load_rule_config
 
 from eval.dataset import CHECKS, Case, Dataset, load
@@ -94,6 +98,31 @@ def misses(rows: list[tuple[Case, ScrutinyReport, float]]) -> list[dict[str, Any
     return found
 
 
+def pipeline_of(rows: list[tuple[Case, ScrutinyReport, float]]) -> dict[str, Any]:
+    """Which extractor and adjudicator this pass actually used, straight off the reports.
+
+    A live run and an offline one produce the same table shape, so the provenance has to travel
+    with the numbers or the two legs get quoted against each other by mistake.
+    """
+    if not rows:
+        return {"extractor": "n/a", "adjudicator": "n/a", "models": {}, "live": False}
+    meta = rows[0][1].model_meta
+    live = meta.extractor != "template" or meta.adjudicator != "deterministic"
+    provenance: dict[str, Any] = {
+        "extractor": meta.extractor,
+        "adjudicator": meta.adjudicator,
+        "models": {
+            "rules": meta.versions.get("rules", ""),
+            "extractor": meta.versions.get("extractor", ""),
+            "adjudicator": meta.versions.get("adjudicator", ""),
+        },
+        "live": live,
+    }
+    if live:
+        provenance["cache"] = combined_stats()
+    return provenance
+
+
 def build_payload(
     dataset: Dataset,
     rows: list[tuple[Case, ScrutinyReport, float]],
@@ -129,6 +158,7 @@ def build_payload(
             "recallTarget": RECALL_TARGET,
             "latencyTargetSeconds": LATENCY_TARGET_SECONDS,
         },
+        "pipeline": pipeline_of(rows),
         "latency": {
             "meanSecondsPerApplication": round(mean_seconds, 4),
             "meanMillisecondsPerApplication": round(mean_seconds * 1000, 2),
@@ -171,6 +201,12 @@ def main(argv: list[str] | None = None) -> int:
     directory = write_report(payload, render_markdown(payload), arguments.out, stamp)
 
     print(f"{directory}/report.md")
+    used = payload["pipeline"]
+    model = used["models"].get("extractor") or used["extractor"]
+    print(f"path      : {used['extractor']} + {used['adjudicator']} ({model})")
+    if used.get("cache"):
+        cache = used["cache"]
+        print(f"llm calls : {cache['misses']} new, {cache['hits']} served from cache")
     print(
         f"fail-flags: precision {payload['evalPrecision']:.2f} "
         f"recall {payload['evalRecall']:.2f} | risk-flag recall "

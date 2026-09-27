@@ -12,6 +12,10 @@ description = "Deterministic synthetic application/document generator for Sewa S
 requires-python = ">=3.11"
 dependencies = []
 
+# The PNG leg only. Text corpus generation stays dependency-free; see generator/render.py.
+[project.optional-dependencies]
+images = ["Pillow>=10.1"]
+
 [tool.setuptools.packages.find]
 include = ["generator*"]
 

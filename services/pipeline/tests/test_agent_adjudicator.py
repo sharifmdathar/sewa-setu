@@ -53,6 +53,10 @@ def _settings(**overrides: Any) -> LlmSettings:
         "model": "stub-judge",
         "timeout_seconds": 1,
         "max_retries": 2,
+        # Every stubbed check sends a near-identical prompt, so an enabled cache would answer
+        # one test from another's stub. Backoff 0 keeps the retry tests instant.
+        "cache_enabled": False,
+        "backoff_base_seconds": 0.0,
     }
     return LlmSettings(**{**values, **overrides})
 

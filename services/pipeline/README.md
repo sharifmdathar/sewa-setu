@@ -133,6 +133,24 @@ LLM adjudicator (30 s timeout, 2 retries, `modelMeta` recorded per call). Withou
 breaks: extraction is the deterministic template parser and ambiguous checks keep the rule
 verdict with a plain-language rewrite. The two skipped tests are exactly this branch.
 
+Three more knobs matter once you point this at a real endpoint (see
+`docs/track-a/live-model-leg.md` for why each exists):
+
+```bash
+export LLM_CACHE=1                        # answers are cached under var/llm-cache
+export LLM_CACHE_DIR=                     # ...or relocate them
+export LLM_BACKOFF_BASE_SECONDS=1         # wait between attempts; capped at 30 s
+```
+
+Every model call now goes through `pipeline/llmcall.py`: a rate-limited or unreachable endpoint
+backs off and retries instead of aborting the run, a model that refuses `response_format:
+json_object` is asked again without it, and an answered request is never re-sent. **Probe before
+any batch run** — one call per question, and it tells you whether the model is usable at all:
+
+```bash
+python -m pipeline.scripts.probe_llm --image data/synthetic/dataset-v1/docs_img/APP-0001-aadhaar-1.png
+```
+
 ## 8. Logs
 
 The pipeline's own lines are one JSON object each, on stdout (`ts`, `level`, `logger`, `message`

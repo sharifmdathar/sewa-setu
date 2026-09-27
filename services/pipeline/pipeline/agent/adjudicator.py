@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import Any, Protocol, runtime_checkable
-
-from pydantic import ValidationError
 
 from pipeline.agent.models import Adjudication
 from pipeline.agent.prompts import ADJUDICATION_SYSTEM_PROMPT, adjudication_user_prompt
 from pipeline.config import LlmSettings, get_llm_settings
 from pipeline.extraction.models import CallMeta
+from pipeline.llmcall import (
+    EndpointNotConfigured,
+    ModelCallFailed,
+    complete_json,
+    new_client,
+)
 from pipeline.rules.models import CheckStatus, ScrutinyCheck, ScrutinyInput
 
 # Statuses the rules engine is allowed to hand to the adjudicator.
@@ -63,7 +66,11 @@ def plain_language(check: ScrutinyCheck) -> str:
 
 
 class LLMAdjudicator:
-    """Asks an OpenAI-compatible model for a structured verdict on one ambiguous check."""
+    """Asks an OpenAI-compatible model for a structured verdict on one ambiguous check.
+
+    Retrying, the JSON-mode fallback and the disk cache live in `pipeline.llmcall`, shared
+    with the extractor, so a rate-limited endpoint degrades the same way in both places.
+    """
 
     name = "llm-adjudicator"
 
@@ -77,58 +84,38 @@ class LLMAdjudicator:
         return self._last_meta
 
     def _ensure_client(self) -> Any:
-        if self._client is not None:
-            return self._client
-        if not self.settings.enabled:
-            raise AdjudicationError("LLM_API_KEY is not set, so LLM adjudication is unavailable")
-        from openai import OpenAI
-
-        self._client = OpenAI(
-            base_url=self.settings.base_url,
-            api_key=self.settings.api_key,
-            timeout=self.settings.timeout_seconds,
-            max_retries=self.settings.max_retries,
-        )
+        if self._client is None:
+            try:
+                self._client = new_client(self.settings)
+            except EndpointNotConfigured as exc:
+                raise AdjudicationError(f"{exc}, so LLM adjudication is unavailable") from exc
         return self._client
 
     def adjudicate(self, check: ScrutinyCheck, data: ScrutinyInput) -> Adjudication:
         client = self._ensure_client()
-        messages = [
-            {"role": "system", "content": ADJUDICATION_SYSTEM_PROMPT},
-            {"role": "user", "content": adjudication_user_prompt(check, data)},
-        ]
-        last_error = "no response"
-
-        for attempt in range(1, self.settings.max_retries + 2):
-            started = time.perf_counter()
-            try:
-                response = client.chat.completions.create(
-                    model=self.settings.model,
-                    messages=messages,
-                    response_format={"type": "json_object"},
-                    temperature=0,
-                )
-            except Exception as exc:  # openai raises many unrelated error types
-                raise AdjudicationError(f"{check.check_id}: LLM call failed: {exc}") from exc
-
-            latency_ms = int(round((time.perf_counter() - started) * 1000))
-            try:
-                verdict = self._to_verdict(response)
-            except (json.JSONDecodeError, ValidationError, AttributeError, TypeError) as exc:
-                last_error = str(exc)
-                continue
-
-            self._last_meta = CallMeta(
+        try:
+            result = complete_json(
+                self.settings,
+                messages=[
+                    {"role": "system", "content": ADJUDICATION_SYSTEM_PROMPT},
+                    {"role": "user", "content": adjudication_user_prompt(check, data)},
+                ],
                 component="adjudicator",
-                model=getattr(response, "model", None) or self.settings.model,
-                latency_ms=latency_ms,
-                attempts=attempt,
+                parse=verdict_from_json,
+                client=client,
             )
-            return verdict
+        except ModelCallFailed as exc:
+            raise AdjudicationError(f"{check.check_id}: {exc}") from exc
 
-        raise AdjudicationError(f"{check.check_id}: unusable adjudicator payload ({last_error})")
+        self._last_meta = CallMeta(
+            component="adjudicator",
+            model=result.model,
+            latency_ms=result.latency_ms,
+            attempts=result.attempts,
+        )
+        return result.value
 
-    def _to_verdict(self, response: Any) -> Adjudication:
-        payload = json.loads(response.choices[0].message.content)
-        # `status` is a contract Literal, so pydantic already rejects non-enum values.
-        return Adjudication.model_validate(payload)
+
+def verdict_from_json(content: str) -> Adjudication:
+    """`status` is a contract Literal, so pydantic already rejects non-enum values."""
+    return Adjudication.model_validate(json.loads(content))

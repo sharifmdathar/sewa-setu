@@ -2,6 +2,9 @@
 
 Kept apart from the runner so the numbers (JSON) and the presentation of them never drift
 silently: this module reads a payload and cannot change what it reports.
+
+The one thing it must get right is provenance. A rules-only pass and a live model pass produce
+identical table shapes, so the title and the caveat paragraphs follow `payload["pipeline"]`.
 """
 
 from __future__ import annotations
@@ -36,19 +39,105 @@ def _gate_line(payload: dict[str, Any]) -> str:
     return "**FAIL** - " + "; ".join(breaching) + "."
 
 
+def _leg(provenance: dict[str, Any]) -> str:
+    return "live model leg" if provenance.get("live") else "rules-only"
+
+
+def _provenance_lines(provenance: dict[str, Any]) -> list[str]:
+    """What ran, named from the reports themselves rather than assumed by this renderer."""
+    models = provenance.get("models") or {}
+    served = models.get("extractor") or "code"
+    judged = models.get("adjudicator") or "code"
+    lines = [
+        "## What this run used",
+        "",
+        f"- extractor `{provenance.get('extractor', 'n/a')}`, reading as `{served}`",
+        f"- adjudicator `{provenance.get('adjudicator', 'n/a')}`, running as `{judged}`",
+        f"- rules config v{models.get('rules', '?')}",
+    ]
+    cache = provenance.get("cache") or {}
+    if provenance.get("live"):
+        new = cache.get("misses", 0)
+        hits = cache.get("hits", 0)
+        lines.append(
+            f"- model calls: {new} answered by the endpoint, {hits} served from the disk cache"
+        )
+        lines += [
+            "",
+            "This is the live leg: every document was read through the endpoint named above, so",
+            "these numbers are model-dependent. Another model is a different result, not a",
+            "reproduction of this one.",
+        ]
+    else:
+        lines.append("- model calls: none")
+        lines += [
+            "",
+            "This is the rules-only leg: template extraction, deterministic adjudication, no",
+            "HTTP. It is the pass SPEC.md section 7 gates on, and it measures rule-and-label",
+            "agreement - not extraction robustness on rendered documents.",
+        ]
+    return lines
+
+
+def _latency_note(provenance: dict[str, Any]) -> str:
+    if provenance.get("live"):
+        return (
+            "Wall-clock through the endpoint, so it includes model round-trips, backoff waits "
+            "and any retry the rate limiter forced. Cached documents cost no call but still "
+            "carry the parse time."
+        )
+    return (
+        "Measured offline: template extraction, no model calls and no HTTP. The demo path "
+        "adds VLM extraction latency and request overhead on top of this."
+    )
+
+
+def _reproduce_lines(provenance: dict[str, Any]) -> list[str]:
+    commands = [
+        "python -m generator --n 200 --anomaly-rate 0.25 --seed 42 \\",
+        "    --out data/synthetic/dataset-v1",
+    ]
+    if provenance.get("live"):
+        commands += [
+            "LLM_BASE_URL=... LLM_API_KEY=... LLM_MODEL=... \\",
+            "    python -m eval.runner --limit 20    # this report",
+        ]
+        closing = [
+            "Numbers come from the live model leg: same rules, same corpus, documents read",
+            "through the endpoint named above. Quote it beside the rules-only table, never",
+            "instead of it - the two answer different questions.",
+        ]
+    else:
+        commands += [
+            "python -m eval.runner            # writes eval/reports/<timestamp>/report.md",
+            "python -m eval.gate              # exit 0 means the SPEC thresholds are met",
+        ]
+        closing = [
+            "Numbers come from the offline pipeline: template extraction, deterministic",
+            "adjudicator, no model calls. The corpus and the rules share a generator, so this",
+            "measures rule-and-label agreement - not extraction robustness on scanned",
+            "documents, which needs the VLM path and a real key.",
+        ]
+    lines = ["## How to reproduce", "", "```bash", *commands, "```", ""]
+    return lines + closing + [""]
+
+
 def render_markdown(payload: dict[str, Any]) -> str:
     """The quotable report. Tables only, no prose that could drift from the JSON."""
     fail_flags = payload["failFlags"]
     risk = payload["riskFlags"]
     latency = payload["latency"]
     dataset = payload["dataset"]
+    provenance = payload.get("pipeline") or {}
     lines = [
-        "# Eval report - dataset-v1",
+        f"# Eval report - dataset-v1 ({_leg(provenance)})",
         "",
         f"Generated {str(payload['generatedAt'])[:19].replace('T', ' ')} UTC - "
         f"{dataset['applications']} applications, "
         f"{dataset['documents']} documents, {dataset['anomalous']} with planted anomalies "
         f"(seed {dataset['seed']}, as of {dataset['asOf']}).",
+        "",
+        *_provenance_lines(provenance),
         "",
         "## Headline (SPEC.md section 2 targets)",
         "",
@@ -112,8 +201,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         f"{payload['thresholds']['latencyTargetSeconds']:.0f} s "
         f"({'met' if latency['underTarget'] else 'NOT met'}).",
         "",
-        "Measured offline: template extraction, no model calls and no HTTP. The demo path "
-        "adds VLM extraction latency and request overhead on top of this.",
+        _latency_note(provenance),
         "",
     ]
     if payload["misses"]:
@@ -126,20 +214,5 @@ def render_markdown(payload: dict[str, Any]) -> str:
         lines += [""]
     else:
         lines += ["No planted failure was missed on this corpus.", ""]
-    lines += [
-        "## How to reproduce",
-        "",
-        "```bash",
-        "python -m generator --n 200 --anomaly-rate 0.25 --seed 42 \\",
-        "    --out data/synthetic/dataset-v1",
-        "python -m eval.runner            # writes eval/reports/<timestamp>/report.md",
-        "python -m eval.gate              # exit 0 means the SPEC thresholds are met",
-        "```",
-        "",
-        "Numbers come from the offline pipeline: template extraction, deterministic adjudicator,",
-        "no model calls. The corpus and the rules share a generator, so this measures rule-and-",
-        "label agreement - not extraction robustness on scanned documents, which needs the VLM",
-        "path and a real key.",
-        "",
-    ]
+    lines += _reproduce_lines(provenance)
     return "\n".join(lines)
