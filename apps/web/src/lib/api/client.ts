@@ -42,12 +42,16 @@ function fromHandlers(h: ApiHandlers): ApiClient {
 }
 
 // Single client per server process so MockApiClient's in-memory store persists
-// across calls (next dev: one process; prod: one per instance — fine for POC).
-let client: ApiClient | undefined;
+// across calls. On `next dev` the server module registry is reset on every
+// recompile, which would wipe a plain module-level `let` and lose writes
+// between a server action and the page it redirects to. We therefore cache the
+// client on globalThis (the same pattern Next recommends for DB connections).
+type GlobalStore = { __sewaApiClient?: ApiClient };
+const g = globalThis as unknown as GlobalStore;
 
 export function getApiClient(): ApiClient {
-  if (!client) client = fromHandlers(buildHandlers());
-  return client;
+  if (!g.__sewaApiClient) g.__sewaApiClient = fromHandlers(buildHandlers());
+  return g.__sewaApiClient;
 }
 
 /** Convenience singleton for server components: `import { api } from "@/lib/api/client"`. */
@@ -56,3 +60,8 @@ export const api: ApiClient = new Proxy({} as ApiClient, {
     return getApiClient()[prop];
   },
 });
+
+/** Explicit getter (avoids Proxy edge cases in some bundlers). */
+export function apiClient(): ApiClient {
+  return getApiClient();
+}
