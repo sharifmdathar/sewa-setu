@@ -84,6 +84,47 @@ class Repository:
             },
         )
 
+    def seed_application(
+        self,
+        application_id: str,
+        service_id: str,
+        applicant_fields: dict[str, Any],
+        documents: list[dict[str, Any]],
+        created_at: str,
+    ) -> dict[str, Any]:
+        """Write a complete, already-uploaded application under a caller-chosen id.
+
+        The demo seeder needs corpus ids and the corpus's own submission timestamps so that
+        re-seeding is reproducible; `create` gives neither, and back-dating a document by
+        stamping it `now()` would put a false time in the citizen's timeline.
+        """
+        submitted = dt.datetime.fromisoformat(created_at)
+        timeline = [
+            _event(submitted, "citizen", "submitted", "Application submitted by the citizen.")
+        ]
+        timeline += [
+            _event(
+                dt.datetime.fromisoformat(str(document["uploadedAt"])),
+                "citizen",
+                "document_uploaded",
+                f"Uploaded {document['fileName']} as {document['docType']}.",
+            )
+            for document in documents
+        ]
+        return self.store.put(
+            APPLICATIONS,
+            {
+                "id": application_id,
+                "serviceId": service_id,
+                "status": "documents_uploaded",
+                "applicantFields": dict(applicant_fields),
+                "createdAt": created_at,
+                "updatedAt": str(documents[-1]["uploadedAt"]) if documents else created_at,
+                "timeline": timeline,
+                "documents": documents,
+            },
+        )
+
     def _transition(
         self, record: dict[str, Any], status: str, actor: str, event: str, message: str
     ) -> dict[str, Any]:

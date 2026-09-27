@@ -86,6 +86,9 @@ curl -s localhost:8000/officer/queue
 curl -s localhost:8000/metrics/summary
 ```
 
+A fresh store answers `/officer/queue` with `[]` - the queue only lists applications that have
+been scrutinized. To fill it without clicking through the citizen UI, seed it (§12).
+
 ## 6. One scrutiny, end to end
 
 ```bash
@@ -188,3 +191,26 @@ rm -rf services/pipeline/var eval/reports data/synthetic/dataset-v1
 - **A contract test fails on an unexpected key** — the response grew a field the frozen contract
   does not declare. Fix the model, not the contract; if the contract is genuinely short a path,
   see `docs/change-requests/CR-1.md` for the pattern.
+
+## 12. Demo seed (integration step I2)
+
+```bash
+python -m pipeline.scripts.seed_demo            # from the repo root, venv active
+```
+
+Writes the first 20 dataset-v1 applications into the store - documents uploaded, scrutiny run,
+statuses and timeline set - so the officer queue, metrics cards and a high-risk case all have
+something to show:
+
+```
+seeded 20 applications into services/pipeline/var (cleared 0 from a previous demo seed)
+  high risk (>=60): APP-0009, APP-0014, APP-0016
+    APP-0009  riskScore 87
+    APP-0014  riskScore 100
+    APP-0016  riskScore 95
+```
+
+Deterministic (same corpus ids, same scores every run) and idempotent: it replaces only
+generator-shaped ids (`APP-0001`..), so applications submitted through the API (`APP-<10 hex>`)
+survive a re-seed. `--limit N` changes the slice size; `--root DIR` seeds somewhere else. Run it
+from the repo root - it imports `pipeline`, which is installed, and reads the corpus files.
