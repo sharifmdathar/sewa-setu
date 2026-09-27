@@ -39,7 +39,12 @@ no application has documents. `--json PATH` writes the summary plus every sample
 | 2:30 "point at C5" | `GET /applications/APP-0014/scrutiny` | C5 `fail` on a `reject` at 100, evidence quoted below | B |
 | 2:30 "request_info" | `POST /officer/decisions` | 200 `{'applicationId': 'APP-0014', 'status': 'info_requested'}` | B |
 | 3:30 "timeline + banner" | `GET /applications/APP-0014` | status `info_requested`; last timeline event `officer / decision_request_info` carrying the officer's note | B |
-| 4:00 "eval numbers" | `GET /metrics/summary` | 21 applications, `avgScrutinySeconds` 0.00133, `evalPrecision` / `evalRecall` 1.0, 20 `applicationsByDay` buckets, `riskDistribution` `{low: 14, medium: 4, high: 3}` | B |
+| 4:00 "eval numbers" | `GET /metrics/summary` | 21 applications, `avgScrutinySeconds` 0.00133, `evalPrecision` / `evalRecall` 1.0, 20 `applicationsByDay` buckets, `riskDistribution` `[{"band":"low","count":14},{"band":"medium","count":4},{"band":"high","count":3}]` | B |
+
+`riskDistribution` is an **array of `{band, count}`** on the wire, not an object keyed by band
+(`openapi.yaml` → `MetricsSummary.riskDistribution`). It is written out here because the shorthand
+`{low 14, medium 4, high 3}` used elsewhere in this file is how it reads on screen, not what the
+client parses.
 
 ### The one explanation read aloud (1:30)
 
@@ -133,6 +138,36 @@ application mean over `--limit 2`, with a 429-and-retry in the sample
 (`docs/track-a/live-model-leg.md`). No real vision model has been measured, so the demo must not
 present any of these figures as what a scanned document costs — on a real endpoint, up to two model
 calls per document sit between the officer and the answer, behind a 30 s timeout.
+
+## Third pass, after the model-leg and C2 changes
+
+Re-run 2026-09-28 against a freshly seeded scratch store (`--limit 26`, port 8125, model
+environment variables explicitly unset). All twelve calls the script narrates answered:
+
+| Beat | Observed |
+| --- | --- |
+| `GET /healthz` · `GET /services` | 200 · 3 services, `income_certificate` requires aadhaar + bank_statement + revenue_record |
+| `POST /applications` | 201 `APP-3DC948A07C` |
+| two `POST .../documents` | 201 `1306f801fe1a`, 201 `9d62ad97fc82` |
+| `GET .../documents` (CR-1) | `['aadhaar', 'bank_statement']` |
+| `POST .../scrutiny/run` | 6.8 ms, risk 99 `reject`, C1 pass / C2 pass / C3 fail / C4 fail / C5 fail |
+| `GET /officer/queue` | 27 items, top `APP-0014 100`, `APP-0026 99`, `APP-3DC948A07C 99` |
+| `GET /applications/APP-0014/scrutiny` | C5 fail, hash `8c7ce8117b88` shared with another application |
+| `POST /officer/decisions` | 200 `info_requested` |
+| `GET /applications/APP-0014` | last timeline event `officer / decision_request_info`, carrying the note |
+| `GET /metrics/summary` | 28 applications, `evalPrecision`/`evalRecall` 1.0, `avgScrutinySeconds` 0.00046 |
+
+**The J2 verdict depends on the fields the presenter types, and the difference is large.** This
+filing declared `annualIncomeInr: 120000` against APP-0001's documents, so C4 and C5 both fired and
+the report came back **risk 99, `reject`**. The same two documents with the corpus's own declared
+fields and no income field give **C4 `info`, risk 39, `request_info`** — the figure quoted at the
+top of this file. Both are correct; they are different applications. Pick one before recording and
+type it consistently, because "the agent recommends reject" and "the agent asks for more
+information" are different stories to narrate at 2:30.
+
+`avgScrutinySeconds` also moved (0.00046 here against 0.00133 above) for the reason already noted:
+it averages only the runs recorded since the store was seeded, so the client-side p50 from
+`bench_scrutiny` remains the figure to quote.
 
 ## What still blocks the full I4
 

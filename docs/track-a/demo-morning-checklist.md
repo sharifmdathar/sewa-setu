@@ -91,6 +91,17 @@ Expected: C1 pass, C2 warn, C3 fail, C4 info, C5 pass, `riskScore 39`, `request_
 `info` rather than `pass` because that application declares no monetary field — if it says `pass`,
 you are on a different application and the numbers will differ.
 
+**Decide the J2 story before you type it in the UI.** The verdict depends on the fields the citizen
+beat enters, and the two options are different stories: declaring an income against APP-0001's
+documents lights up C4 *and* C5 and returns **risk 99 `reject`**; leaving the income out returns
+**risk 39 `request_info`**. Both are correct for the filing that was typed. Whichever you pick,
+type the same values on take two, or the queue shot and the report shot will not agree.
+
+The full twelve-call walk has been rehearsed three times against current code, most recently
+2026-09-28 with the model environment unset: every call answered, all under 7 ms, and the
+decision-to-timeline loop closed (`info_requested` plus a `decision_request_info` event carrying
+the officer's note). Details in `docs/track-a/i4-demo-rehearsal.md`.
+
 ## 5. Confirm the gates before you quote any number
 
 ```bash
