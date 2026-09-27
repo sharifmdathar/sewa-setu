@@ -1,0 +1,7 @@
+# Regenerable synthetic corpora and local build artifacts.
+dataset-*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/

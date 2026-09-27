@@ -1,0 +1,23 @@
+# Synthetic corpus (Track A). Regenerate with:
+#   PYTHONPATH=data/synthetic python -m generator --n 200 --anomaly-rate 0.25 \
+#       --seed 42 --out data/synthetic/dataset-v1
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "generator"
+version = "0.1.0"
+description = "Deterministic synthetic application/document generator for Sewa Setu (SPEC.md section 6)"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["generator*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
