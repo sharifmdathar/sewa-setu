@@ -54,7 +54,7 @@ ErrorState-friendly errors, no `any`); switch via API_MODE. DoD: type-checks; un
 mocked fetch for 2 endpoints incl. 404 path.
 Commit: `track-b: real api client`
 
-## B8 — Demo hardening
+## B8 — Demo hardening [DONE — lint + tsc + vitest green, routes 200 on live dev; `next build` deferred; needs dev restart to reload seed]
 Write scope: apps/web/**
 Task: deterministic mock seed mirroring dataset-v1 shapes (3 clean, 2 anomalous, 1 decided,
 1 info_requested); loading/empty/error states on every route; docs/track-b/demo-checklist.md
