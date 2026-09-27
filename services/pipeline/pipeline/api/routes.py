@@ -8,6 +8,7 @@ every error carries a status, a machine-readable code and a string detail.
 
 from __future__ import annotations
 
+import time
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -113,13 +114,14 @@ def run_scrutiny_for(
     application_id: str, repo: Repo
 ) -> ScrutinyReport:
     """Ingestion -> extraction -> rules -> adjudication -> scoring, then persisted."""
+    started = time.perf_counter()  # the whole handler: intake, extraction, rules, scoring, save
     record = require_record(repo, application_id)
     if not record["documents"]:
         raise ApiError.documents_required(application_id)
     pending = repo.mark_scrutiny_pending(record)
     data, documents = repo.scrutiny_request(pending, now().date())
     report = run_pipeline(data, documents, generated_at=now())
-    repo.save_report(report)
+    repo.save_report(report, scrutiny_ms=(time.perf_counter() - started) * 1000)
     event(
         LOGGER,
         "scrutiny completed",

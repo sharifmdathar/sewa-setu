@@ -239,6 +239,33 @@ def test_an_info_request_stays_pending_rather_than_becoming_a_decision(
     assert payload["decided"] == 0
 
 
+def test_metrics_report_real_scrutiny_time_not_a_rounded_zero(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """`modelMeta.latencyMs` is an integer ms; sub-millisecond work rounded away to 0.0 s."""
+    application_id = filed_application(client)
+    client.post(f"/applications/{application_id}/scrutiny/run")
+
+    metrics = client.get("/metrics/summary").json()
+    stored = repository_module.Repository(tmp_path).get(application_id)
+    payload = client.get(f"/applications/{application_id}").json()
+
+    assert metrics["avgScrutinySeconds"] > 0.0
+    assert stored["scrutinyMs"] > 0
+    assert "scrutinyMs" not in payload  # internal bookkeeping; the contract does not declare it
+
+
+def test_an_older_record_falls_back_to_the_latency_it_did_record() -> None:
+    """Records written before the timing fix must still produce a number, not zero."""
+    record: dict[str, object] = {"id": "APP-0001"}
+    report = {"modelMeta": {"latencyMs": 37}}
+
+    assert repository_module.scrutiny_ms(record, report) == 37.0
+    assert repository_module.scrutiny_ms({"scrutinyMs": 0.42}, report) == 0.42
+    assert repository_module.scrutiny_ms({"scrutinyMs": True}, report) == 37.0  # not a number
+    assert repository_module.scrutiny_ms({}, {"modelMeta": {}}) == 0.0
+
+
 def test_metrics_omit_the_eval_fields_until_the_harness_has_run(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -364,7 +364,10 @@ def test_no_contract_path_goes_unjudged() -> None:
         if method in {"get", "post", "put", "patch", "delete"}
     }
 
-    assert declared == COVERED
+    untested = declared - COVERED
+    vanished = COVERED - declared
+    assert not untested, f"contract paths with no live test - add one each: {sorted(untested)}"
+    assert not vanished, f"tests judge paths no longer in the contract: {sorted(vanished)}"
     for method, path in sorted(COVERED - {("get", "/healthz")}):
         status = _success_status(method, path)
         assert isinstance(response_schema(method, path, status), dict), (method, path, status)

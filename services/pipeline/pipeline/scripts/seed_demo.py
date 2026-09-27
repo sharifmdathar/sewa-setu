@@ -29,6 +29,7 @@ import base64
 import datetime as dt
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -223,8 +224,9 @@ def seed(
 
     for case, stored in uploaded:
         data = _input_for(case, repository, stored, stamp)
+        started = time.perf_counter()
         report = run_scrutiny(data, case.documents)
-        repository.save_report(report)
+        repository.save_report(report, scrutiny_ms=(time.perf_counter() - started) * 1000)
         result.seeded.append(case.application_id)
         result.reports[case.application_id] = repository.get_report(case.application_id) or {}
         if report.risk_score >= threshold:

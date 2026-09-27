@@ -147,6 +147,13 @@ improving recall means richer scoring (A6 follow-up), not moving the goal posts.
   worker, or move to a real database (out of POC scope).
 - **Auth**: none, by design (SPEC §3 — production auth is out, the demo uses a role switcher).
   Every path is unauthenticated; do not expose this port.
+- **M4 is still unapplied.** `shared/contracts/openapi.yaml` is byte-identical to the scaffold
+  freeze (verified `git log -1 -- shared/contracts/openapi.yaml`). The CR-1/2/3 hunks are recorded
+  and pre-validated, but editing the contract needs the paired session - and while only one track
+  is present, a policy guard blocks the edit outright, so this is not something a lone agent can
+  land by trying harder.
+- **Queue/metrics "open" split is one definition today** (`OPEN_STATUSES`) but the queue still
+  returns only `scrutiny_done` items; CR-2 changes that plus the one contract description line.
 - **CR-1** open: no contract path lists an application's documents.
 - **I2 seed**: `tests/corpus.py` and `eval/dataset.py` both read dataset-v1 into pipeline shapes;
   the seeding step can reuse either, but application ids from the corpus are what the store will

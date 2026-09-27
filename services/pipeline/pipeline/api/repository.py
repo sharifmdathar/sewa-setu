@@ -205,11 +205,15 @@ class Repository:
             "Automated scrutiny started.",
         )
 
-    def save_report(self, report: ScrutinyReport) -> dict[str, Any]:
+    def save_report(
+        self, report: ScrutinyReport, scrutiny_ms: float | None = None
+    ) -> dict[str, Any]:
         record = self.get(report.application_id)
         if record is None:  # the report names an application that is not in the store
             raise KeyError(report.application_id)
         self.store.put(REPORTS, report.model_dump(mode="json", by_alias=True))
+        if scrutiny_ms is not None:
+            record = self.store.put(APPLICATIONS, {**record, "scrutinyMs": scrutiny_ms})
         return self._transition(
             record,
             "scrutiny_done",
@@ -262,19 +266,19 @@ class Repository:
             for report in (self.get_report(str(record["id"])) for record in records)
             if report
         ]
-        latencies = [
-            int(report["modelMeta"]["latencyMs"])
-            for report in (self.store.list(REPORTS))
-            if isinstance(report.get("modelMeta"), dict)
+        reports = [
+            (record, self.get_report(str(record["id"])))
+            for record in records
         ]
-        evaluated = [
-            record for record in records if self.get_report(str(record["id"])) is not None
+        evaluated = [record for record, report in reports if report is not None]
+        latencies = [
+            scrutiny_ms(record, report) for record, report in reports if report is not None
         ]
         summary: dict[str, Any] = {
             "applicationsTotal": len(records),
             "pending": sum(1 for record in records if record["status"] in OPEN_STATUSES),
             "decided": sum(1 for record in records if record["status"] not in OPEN_STATUSES),
-            "avgScrutinySeconds": round(sum(latencies) / len(latencies) / 1000, 3)
+            "avgScrutinySeconds": round(sum(latencies) / len(latencies) / 1000, 5)
             if latencies
             else 0.0,
             "flagRate": round(sum(s >= flag_threshold for s in scores) / len(evaluated), 3)
@@ -323,6 +327,27 @@ def newest_eval_report(reports_dir: Path = EVAL_REPORTS_DIR) -> Path | None:
     if not candidates:
         return None
     return max(candidates, key=lambda report: (_report_clock(report), str(report)))
+
+
+def scrutiny_ms(record: dict[str, Any], report: dict[str, Any]) -> float:
+    """Milliseconds of the last run as measured at the route, not inside the pipeline.
+
+    Kept as a float because the work is sub-millisecond: the contract types
+    `modelMeta.latencyMs` as an *integer*, so every fast scrutiny rounds to 0 and the
+    dashboard reports "0.0 s" for work that plainly happened. Milliseconds stay in the
+    store and never reach the wire.
+    """
+    measured = record.get("scrutinyMs")
+    if _is_count(measured):
+        return float(measured)
+    meta = report.get("modelMeta")
+    latency = meta.get("latencyMs") if isinstance(meta, dict) else None
+    return float(latency) if _is_count(latency) else 0.0
+
+
+def _is_count(value: object) -> bool:
+    """A real, non-negative number - and a bool is not one, however much Python argues."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
 
 
 def latest_eval_metrics(directory: Path | None = None) -> dict[str, float]:

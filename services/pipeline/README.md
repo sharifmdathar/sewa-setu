@@ -165,6 +165,12 @@ python -m eval.gate; echo $?    # 0 = PASS, 1 = threshold breach, 2 = no report 
 leaving the table to be interpreted. Current result on dataset-v1: fail-flag precision 1.00 /
 recall 1.00 (targets 0.90 / 0.85), mean ~0.1 ms per application offline.
 
+`avgScrutinySeconds` is measured per application at the route (intake, extraction, rules,
+adjudication, scoring, persistence) and kept in the store as `scrutinyMs`, which never goes on the
+wire. It is not read from `modelMeta.latencyMs`: that field is an integer millisecond per the
+contract, so the sub-millisecond pipeline rounds it to 0 and the dashboard shows "0.0 s". Measured
+live on the demo slice: ~0.2 ms of pipeline work, ~5 ms mean per `POST .../scrutiny/run` over HTTP.
+
 `GET /metrics/summary` reads `evalPrecision` / `evalRecall` from the newest
 `eval/reports/<ts>/report.json` - the same newest-run rule `eval.gate` uses, so the dashboard and
 the gate can never quote different runs - and omits both keys when no eval has run or the numbers
