@@ -59,3 +59,4 @@ class CallMeta(BaseModel):
     model: str
     latency_ms: int
     attempts: int = 1
+    cached: bool = False

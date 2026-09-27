@@ -30,6 +30,28 @@ def _row(label: str, tally: dict[str, Any]) -> str:
     )
 
 
+def _cells(names: list[str]) -> str:
+    return ", ".join(f"`{name}`" for name in names) if names else "—"
+
+
+def _per_document_lines(reads: list[dict[str, Any]]) -> list[str]:
+    """The aggregate says 0.86; this says which page lost which field, which is what you act on."""
+    lines = [
+        "",
+        "## Per document",
+        "",
+        "| Document | Type | Stated | Correct | Not transcribed | Read incorrectly | Invented |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in reads:
+        lines.append(
+            f"| `{row['documentId']}` | {row['docType']} | {row['stated']} | "
+            f"{row['correct']} | {_cells(row['missed'])} | {_cells(row['wrong'])} | "
+            f"{_cells(row['invented'])} |"
+        )
+    return lines
+
+
 def render_markdown(payload: dict[str, Any]) -> str:
     reader = payload["reader"]
     fields = payload["fields"]
@@ -79,6 +101,11 @@ def render_markdown(payload: dict[str, Any]) -> str:
             f"| Time per document | p50 {latency['p50Ms']:.0f} ms, p95 {latency['p95Ms']:.0f} ms, "
             f"max {latency['maxMs']:.0f} ms ({latency['calls']} calls) |"
         )
+    elif payload.get("cachedReads"):
+        lines.append(
+            f"| Time per document | not measured: all "
+            f"{payload['cachedReads']} reads were served from the disk cache |"
+        )
     lines += [
         "",
         "Precision is reported alongside recall because an invented value is worse than a blank "
@@ -107,6 +134,10 @@ def render_markdown(payload: dict[str, Any]) -> str:
     ]
     for name in sorted(payload["byDocType"]):
         lines.append(_row(name, payload["byDocType"][name]))
+    reads = payload.get("reads") or []
+    if reads and len(reads) <= 25:
+        # A whole-corpus run would render 917 rows nobody reads; the aggregate covers that.
+        lines += _per_document_lines(reads)
     if payload["problems"]:
         lines += ["", "## Documents that could not be read", ""]
         lines += [

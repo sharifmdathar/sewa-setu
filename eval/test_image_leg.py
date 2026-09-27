@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pipeline.extraction import ExtractedFields, ExtractionError, TemplateExtractor
+from pipeline.extraction import (
+    CallMeta,
+    ExtractedFields,
+    ExtractionError,
+    TemplateExtractor,
+)
 
 from eval.image_leg import as_dict, build_extractor, load_manifest, main
 from eval.image_leg_md import render_markdown
@@ -141,6 +146,42 @@ def test_an_invented_expiry_date_shows_in_precision_and_nowhere_else() -> None:
     assert result.overall.returned == 6, "it answered a field the document never stated"
     assert result.overall.as_dict()["precision"] == round(5 / 6, 4)
     assert result.clean_reads == 0, "a clean read also means no false answers"
+    assert result.reads[0]["invented"] == ["expiryDate"]
+    assert result.reads[0]["missed"] == [] and result.reads[0]["wrong"] == []
+
+
+def test_a_wrong_value_is_separated_from_a_missing_one() -> None:
+    result = LegResult()
+    score_entry(_entry(), _fields(name="Anita Baruah", expiry_date=None), result)
+
+    row = result.reads[0]
+    assert row["wrong"] == ["name"], "transcribed badly"
+    assert row["missed"] == ["expiryDate"], "not transcribed at all"
+    assert row["correct"] == 4 and row["stated"] == 6
+
+
+def test_the_per_document_table_names_the_row_that_lost_a_field() -> None:
+    result = LegResult(documents=1, latencies_ms=[])
+    result.overall = Tally(expected=6, returned=5, matched=5)
+    result.reads = [
+        {
+            "documentId": "APP-0001-D1",
+            "docType": "aadhaar",
+            "fileName": "APP-0001-aadhaar-1.png",
+            "stated": 6,
+            "answered": 5,
+            "correct": 5,
+            "missed": ["expiryDate"],
+            "wrong": [],
+            "invented": [],
+        }
+    ]
+    payload = as_dict(result, "model", Path("/tmp/x"), dt.datetime(2026, 9, 27, tzinfo=dt.UTC))
+
+    markdown = render_markdown(payload)
+    assert "## Per document" in markdown
+    assert "`APP-0001-D1`" in markdown and "`expiryDate`" in markdown
+    assert "| — |" in markdown, "the buckets that are empty still need a column"
 
 
 def test_a_minimally_formatted_answer_still_matches() -> None:
@@ -169,6 +210,8 @@ def test_an_unreadable_document_charges_only_what_it_lost() -> None:
     assert result.overall.expected == 12 and result.overall.matched == 0
     assert {row["documentId"] for row in result.problems} == {"APP-0001-D1", "APP-0002-D1"}
     assert result.problems[0]["fieldsLost"] == 6
+    assert len(result.reads) == 2 and result.reads[0]["error"]
+    assert len(result.reads[0]["missed"]) == 6, "an unreadable page lost every stated field"
 
 
 def test_percentile_sits_on_a_real_value() -> None:
@@ -237,6 +280,30 @@ def test_the_model_reader_refuses_to_score_pixels_with_a_text_parser(
 
     assert caught.value.code == 2
     assert "--reader text" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not HAS_GENERATOR, reason="generator package not installed")
+def test_a_cached_read_is_counted_but_never_reported_as_zero_latency(
+    corpus: Path,
+) -> None:
+    """A warm re-run must not publish "p50 0 ms" beside a model claim - that measures the cache."""
+
+    class Cached(StubExtractor):
+        @property
+        def last_meta(self) -> Any:
+            return CallMeta(
+                component="extractor", model="m", latency_ms=0, attempts=1, cached=True
+            )
+
+    result = score_documents(
+        load_manifest(corpus)[:1], Cached(_fields()), corpus, "model", LegResult()
+    )
+    payload = as_dict(result, "model", corpus, dt.datetime(2026, 9, 27, tzinfo=dt.UTC))
+
+    assert result.unreadable == 0, "the fixture supplies a real PNG"
+    assert result.latencies_ms == [] and result.cached_reads == 1
+    assert payload["latency"]["calls"] == 0
+    assert "not measured: all 1 reads were served from the disk cache" in render_markdown(payload)
 
 
 def test_the_payload_carries_the_provenance_a_reader_needs() -> None:

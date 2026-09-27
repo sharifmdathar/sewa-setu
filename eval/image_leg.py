@@ -84,11 +84,13 @@ def as_dict(
         "dataset": str(root),
         "documents": result.documents,
         "unreadable": result.unreadable,
+        "cachedReads": result.cached_reads,
         "cleanReads": result.clean_reads,
         "cleanReadRate": round(result.clean_reads / (result.documents or 1), 4),
         "fields": result.overall.as_dict(),
         "byField": {name: tally.as_dict() for name, tally in result.by_field.items()},
         "byDocType": {name: tally.as_dict() for name, tally in result.by_type.items()},
+        "reads": result.reads,
         "latency": {
             "calls": len(latencies),
             "meanMs": round(statistics.fmean(latencies), 2) if latencies else 0.0,

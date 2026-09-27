@@ -87,7 +87,9 @@ class LegResult:
     overall: Tally = field(default_factory=Tally)
     by_field: dict[str, Tally] = field(default_factory=dict)
     by_type: dict[str, Tally] = field(default_factory=dict)
+    reads: list[dict[str, Any]] = field(default_factory=list)
     latencies_ms: list[int] = field(default_factory=list)
+    cached_reads: int = 0
     problems: list[dict[str, Any]] = field(default_factory=list)
 
     def tallies_for(self, name: str, doc_type: str) -> tuple[Tally, Tally, Tally]:
@@ -153,19 +155,44 @@ def document_for(entry: Entry, root: Path, reader: str) -> DocumentContent:
 
 
 def score_entry(entry: Entry, fields: ExtractedFields, result: LegResult) -> None:
-    """Fold one read against one manifest row into the overall, field and type tallies."""
-    complete = True
+    """Fold one read against one manifest row into the overall, field and type tallies.
+
+    The per-document row separates the three ways a read can be wrong, because they argue for
+    different fixes: `missed` is a field the model did not transcribe, `wrong` is one it
+    transcribed badly, and `invented` is a value for something the document never stated.
+    """
+    row: dict[str, Any] = {
+        "documentId": entry.document_id,
+        "docType": entry.doc_type,
+        "fileName": entry.image_file_name,
+        "stated": 0,
+        "answered": 0,
+        "correct": 0,
+        "missed": [],
+        "wrong": [],
+        "invented": [],
+    }
     for name, attribute in FIELDS.items():
         want = normalise(name, entry.expected.get(name))
         got = normalise(name, getattr(fields, attribute, None))
         stated = want not in EMPTY_VALUES
         answered = got not in EMPTY_VALUES
         matched = stated and answered and want == got
-        if (stated or answered) and not matched:
-            complete = False
+        row["stated"] += int(stated)
+        row["answered"] += int(answered)
+        row["correct"] += int(matched)
+        if matched:
+            pass
+        elif stated and answered:
+            row["wrong"].append(name)
+        elif stated:
+            row["missed"].append(name)
+        elif answered:
+            row["invented"].append(name)
         for tally in result.tallies_for(name, entry.doc_type):
             tally.add(expected=stated, returned=answered, matched=matched)
-    if complete:
+    result.reads.append(row)
+    if not (row["missed"] or row["wrong"] or row["invented"]):
         result.clean_reads += 1
 
 
@@ -184,7 +211,13 @@ def score_documents(
             continue
         score_entry(entry, fields, result)
         meta = extractor.last_meta
-        if meta is not None:
+        if meta is None:
+            continue
+        if meta.cached:
+            # A cache hit has no network latency to report. Counting it would publish
+            # "p50 0 ms" beside a model claim, which misleads rather than measures.
+            result.cached_reads += 1
+        else:
             result.latencies_ms.append(meta.latency_ms)
     return result
 
@@ -200,6 +233,20 @@ def record_unreadable(result: LegResult, entry: Entry, reason: str) -> None:
     for name in lost:
         for tally in result.tallies_for(name, entry.doc_type):
             tally.add(expected=True, returned=False, matched=False)
+    result.reads.append(
+        {
+            "documentId": entry.document_id,
+            "docType": entry.doc_type,
+            "fileName": entry.image_file_name,
+            "stated": len(lost),
+            "answered": 0,
+            "correct": 0,
+            "missed": lost,
+            "wrong": [],
+            "invented": [],
+            "error": reason,
+        }
+    )
     result.problems.append(
         {"documentId": entry.document_id, "reason": reason, "fieldsLost": len(lost)}
     )

@@ -112,6 +112,7 @@ class LLMAdjudicator:
             model=result.model,
             latency_ms=result.latency_ms,
             attempts=result.attempts,
+            cached=result.cached,
         )
         return result.value
 
