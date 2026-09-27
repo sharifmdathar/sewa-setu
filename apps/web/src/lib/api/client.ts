@@ -6,6 +6,7 @@
 
 import type { ApiClient, ApiHandlers } from "./handlers";
 import { createMockHandlers } from "./mock";
+import { createRealApiClient } from "./real";
 
 export type ApiMode = "mock" | "real";
 
@@ -17,14 +18,11 @@ export function apiBaseUrl(): string {
   return process.env.API_BASE_URL ?? "http://localhost:8000";
 }
 
-function buildHandlers(): ApiHandlers {
-  const mode = apiMode();
-  if (mode === "mock") return createMockHandlers();
-  // "real" transport (fetch-based RealApiClient) is prompt B7's scope.
-  // Until then we fail loudly rather than silently serving mocks in real mode.
-  throw new Error(
-    'API_MODE=real requires the RealApiClient (Track B prompt B7, not yet built). Set API_MODE=mock.',
-  );
+function buildClient(): ApiClient {
+  if (apiMode() === "real") {
+    return createRealApiClient({ baseUrl: apiBaseUrl() });
+  }
+  return fromHandlers(createMockHandlers());
 }
 
 function fromHandlers(h: ApiHandlers): ApiClient {
@@ -50,7 +48,7 @@ type GlobalStore = { __sewaApiClient?: ApiClient };
 const g = globalThis as unknown as GlobalStore;
 
 export function getApiClient(): ApiClient {
-  if (!g.__sewaApiClient) g.__sewaApiClient = fromHandlers(buildHandlers());
+  if (!g.__sewaApiClient) g.__sewaApiClient = buildClient();
   return g.__sewaApiClient;
 }
 
