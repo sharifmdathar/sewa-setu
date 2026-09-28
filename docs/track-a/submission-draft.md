@@ -26,10 +26,10 @@ engine C1–C5 (`rules.yaml`, versioned in the report) → adjudicator (`warn`/a
 scorer → `ScrutinyReport` + riskScore + recommendation → JSON file store. Offline over the same
 pipeline: the synthetic generator and the eval harness.
 
-Code size as measured: 3,991 lines of pipeline, 1,829 eval, 1,052 generator, 5,108 test lines
-across 247 + 32 tests. State and reporting are separate modules rather than one service class:
-`pipeline/api/repository.py` performs transitions, `pipeline/api/readmodel.py` answers questions
-about the records it wrote.
+Code size as measured: 4,080 lines of pipeline, 1,402 of eval harness, 1,052 generator, 3,179 web,
+and 5,794 test lines across 263 + 36 + 11 tests (2 skipped). State and reporting are separate
+modules rather than one service class: `pipeline/api/repository.py` performs transitions,
+`pipeline/api/readmodel.py` answers questions about the records it wrote.
 
 **Invariants that hold because they are tested**, not because they are documented: no check without
 evidence and explanation; the agent never decides, only recommends; contract-exact responses
@@ -158,10 +158,11 @@ null is an officer-visible gap rather than a silent pass. Full investigation in
 
 | Figure | Command / file |
 | --- | --- |
-| precision/recall 1.00, recall 0.54, 0.11 ms | `python -m eval.runner` → `eval/reports/<ts>/report.md`; `python -m eval.gate` |
+| precision/recall 1.00, recall 0.54, 0.12 ms | `python -m eval.runner` → `eval/reports/<ts>/report.md`; `python -m eval.gate` |
 | p50 3.0 ms live | `python -m pipeline.scripts.bench_scrutiny --base-url http://127.0.0.1:8123 --sample 20 --repeat 5` |
 | 200 apps / 917 docs / 50 anomalies / seed 42 | `python -m generator --n 200 --anomaly-rate 0.25 --seed 42` (SPEC §6) |
-| 247 + 32 tests, ruff clean | `ruff check .` + `pytest -q` in `services/pipeline` and `eval` |
+| 263 + 36 + 11 tests, ruff clean | `ruff check .` + `pytest -q` in `services/pipeline` and `eval`, `npm test` in `apps/web` |
+| 4,080 / 1,402 / 1,052 / 3,179 / 5,794 code lines | `find <area> -name '*.py' \| xargs wc -l`, and `apps/web/src` by the same |
 | read-back control (124/124, 20 of 20) | `python -m eval.image_leg --reader text` → `eval/reports/image-leg/<ts>/image_leg.md` |
 | live VLM read-back (107/124, 5 of 20, p50 2.8 s) | `LLM_MODEL=meta/llama-3.2-11b-vision-instruct python -m eval.image_leg` → `eval/reports/image-leg/2026-09-27T21-06-19/` |
 | 666 ms stand-in leg | `docs/track-a/live-model-leg.md`, verified with `eval.runner --limit 2` against a local fake |
