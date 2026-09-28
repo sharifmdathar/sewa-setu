@@ -30,9 +30,19 @@ const DEFAULT_STATUSES: AppStatus[] = STATUS_OPTIONS.filter(
 // table, so the filter and the row it matched can never disagree.
 const RISK_OPTIONS: RiskBand[] = ["high", "medium", "low"];
 
+// The contract types applicantFields as a bare object, so no validator can catch a wrong key
+// here - the mock fixtures say "applicantName" and the real API says "fullName", and reading
+// only the first rendered an em-dash on every row against the live API. CR-5 proposes a
+// Service.nameField so this is declared rather than guessed; until then, take whichever the
+// application actually carries.
+const NAME_KEYS = ["fullName", "applicantName", "name"] as const;
+
 function nameOf(fields: Record<string, unknown>): string {
-  const n = fields["applicantName"];
-  return typeof n === "string" && n ? n : "—";
+  for (const key of NAME_KEYS) {
+    const value = fields[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "—";
 }
 
 export default async function OfficerQueuePage({
