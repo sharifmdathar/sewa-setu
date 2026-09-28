@@ -127,12 +127,17 @@ export default async function OfficerQueuePage({
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Risk</th>
                 <th className="px-3 py-2">Updated</th>
-                <th className="px-3 py-2" />
+                <th className="px-3 py-2">
+                  <span className="sr-only">Report</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {filtered.map(({ q, applicant }) => (
-                <tr key={q.applicationId} className="hover:bg-zinc-50">
+                <tr
+                  key={q.applicationId}
+                  className="group relative cursor-pointer hover:bg-zinc-50"
+                >
                   <td className="px-3 py-2 font-mono text-xs">#{q.applicationId}</td>
                   <td className="px-3 py-2 font-medium">{applicant}</td>
                   <td className="px-3 py-2">{nameOfService(q.serviceId)}</td>
@@ -146,9 +151,14 @@ export default async function OfficerQueuePage({
                     {new Date(q.updatedAt).toLocaleString()}
                   </td>
                   <td className="px-3 py-2 text-right">
+                    {/* Stretched link: the row is the hit area, but the anchor is still a real
+                        anchor, so keyboard focus, middle-click and open-in-new-tab all survive
+                        (ui-guidelines: keyboard reachable, visible focus rings). The link must
+                        stay `position: static` for the overlay to size against the row. */}
                     <Link
                       href={`/officer/apps/${q.applicationId}`}
-                      className="inline-block rounded-md border border-zinc-300 px-3 py-1.5 font-medium transition hover:border-brand-500 hover:text-brand-700"
+                      aria-label={`Open the scrutiny report for ${applicant}, ${q.applicationId}`}
+                      className="inline-block rounded-md border border-zinc-300 px-3 py-1.5 font-medium transition group-hover:border-brand-500 group-hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 after:absolute after:inset-0 after:content-['']"
                     >
                       Open report
                     </Link>
