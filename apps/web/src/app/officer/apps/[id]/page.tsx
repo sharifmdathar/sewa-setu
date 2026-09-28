@@ -21,6 +21,29 @@ const RECO_STYLE: Record<ScrutinyReport["recommendation"], string> = {
   reject: "bg-red-50 text-red-900 border-red-200",
 };
 
+function textOf(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Says out loud whether a model read this document, and which one.
+ *
+ * `modelMeta.extractor` names the *component* ("template" or "llm-vlm"); the served model is in
+ * `versions`, where "code" means no endpoint was involved. Without this line an officer (or a
+ * judge) cannot tell the rules-only path from a live model read, and the two have very
+ * different accuracy - which is the same distinction the eval reports title themselves with.
+ */
+function provenanceLabel(meta: ScrutinyReport["modelMeta"]): string {
+  const versions = meta.versions ?? {};
+  const served = textOf(versions.extractor);
+  const rules = textOf(versions.rules);
+  const parts = [
+    served && served !== "code" ? `model ${served}` : "no model in the loop",
+  ];
+  if (rules) parts.push(`rules v${rules.replace(/^v/, "")}`);
+  return parts.join(" · ");
+}
+
 export default async function OfficerReportPage({
   params,
   searchParams,
@@ -100,6 +123,7 @@ export default async function OfficerReportPage({
                   {report.modelMeta.extractor ?? "?"} / {report.modelMeta.adjudicator ?? "?"} ·{" "}
                   {report.modelMeta.latencyMs ?? "?"} ms
                 </p>
+                <p>{provenanceLabel(report.modelMeta)}</p>
               </div>
             </section>
 
