@@ -4,9 +4,10 @@
 import Link from "next/link";
 import { getApiClient } from "@/lib/api/client";
 import { EmptyState } from "@/components/EmptyState";
-import { RiskMeter } from "@/components/RiskMeter";
+import { RiskMeter, riskBand } from "@/components/RiskMeter";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StatusFilter } from "./status-filter";
+import { RiskFilter, type RiskBand } from "./risk-filter";
 import type { AppStatus } from "@/lib/api/types";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,10 @@ const DEFAULT_STATUSES: AppStatus[] = STATUS_OPTIONS.filter(
   (s) => s !== "decided",
 );
 
+// Bands come from RiskMeter, the same function that colours the risk bar in this
+// table, so the filter and the row it matched can never disagree.
+const RISK_OPTIONS: RiskBand[] = ["high", "medium", "low"];
+
 function nameOf(fields: Record<string, unknown>): string {
   const n = fields["applicantName"];
   return typeof n === "string" && n ? n : "—";
@@ -33,7 +38,7 @@ function nameOf(fields: Record<string, unknown>): string {
 export default async function OfficerQueuePage({
   searchParams,
 }: {
-  searchParams: { status?: string | string[]; risk?: string; f?: string };
+  searchParams: { status?: string | string[]; risk?: string | string[]; f?: string };
 }) {
   const api = getApiClient();
   const queue = await api.getQueue();
@@ -62,14 +67,15 @@ export default async function OfficerQueuePage({
   );
   const selectedStatuses = explicit ? chosen : DEFAULT_STATUSES;
   const selected = new Set<AppStatus>(selectedStatuses);
-  const risk =
-    searchParams.risk === "high" || searchParams.risk === "low"
-      ? searchParams.risk
-      : undefined;
+  const riskRaw = searchParams.risk;
+  const riskChosen = (
+    Array.isArray(riskRaw) ? riskRaw : riskRaw ? [riskRaw] : []
+  ).filter((b): b is RiskBand => RISK_OPTIONS.includes(b as RiskBand));
+  const selectedBands = explicit ? riskChosen : RISK_OPTIONS;
+  const bands = new Set<RiskBand>(selectedBands);
   const filtered = rows.filter(({ q }) => {
     if (!selected.has(q.status)) return false;
-    if (risk === "high" && q.riskScore < 60) return false;
-    if (risk === "low" && q.riskScore >= 60) return false;
+    if (!bands.has(riskBand(q.riskScore))) return false;
     return true;
   });
 
@@ -88,19 +94,7 @@ export default async function OfficerQueuePage({
         >
           <input type="hidden" name="f" value="1" />
           <StatusFilter options={STATUS_OPTIONS} selected={selectedStatuses} />
-          <label htmlFor="f-risk" className="sr-only">
-            Filter by risk
-          </label>
-          <select
-            id="f-risk"
-            name="risk"
-            defaultValue={risk ?? ""}
-            className="min-h-10 rounded-md border border-zinc-300 bg-white px-2"
-          >
-            <option value="">All risk</option>
-            <option value="high">High (≥60)</option>
-            <option value="low">Low (&lt;60)</option>
-          </select>
+          <RiskFilter options={RISK_OPTIONS} selected={selectedBands} />
           <button className="min-h-10 rounded-md bg-brand-600 px-4 font-medium text-white hover:bg-brand-700">
             Filter
           </button>
