@@ -8,7 +8,7 @@ import { getApiClient } from "@/lib/api/client";
 import { CheckList } from "@/components/CheckList";
 import { RiskMeter } from "@/components/RiskMeter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatFieldValue } from "@/lib/fields";
+import { applicantNameOf, formatFieldValue } from "@/lib/fields";
 import type { ScrutinyReport } from "@/lib/api/types";
 import { DecisionPanel } from "./decision-panel";
 
@@ -73,9 +73,7 @@ export default async function OfficerReportPage({
               <span className="font-mono text-sm text-zinc-400">#{application.id}</span>
             </h1>
             <p className="text-sm text-zinc-500">
-              {typeof application.applicantFields["applicantName"] === "string"
-                ? (application.applicantFields["applicantName"] as string)
-                : "Unknown applicant"}{" "}
+              {applicantNameOf(application.applicantFields) ?? "Applicant not named"}{" "}
               · created {new Date(application.createdAt).toLocaleString()}
             </p>
           </div>

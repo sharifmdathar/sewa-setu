@@ -104,3 +104,19 @@ export function formatFieldValue(v: unknown): string {
   if (typeof v === "number") return v.toLocaleString("en-IN");
   return String(v);
 }
+
+// The contract types applicantFields as a bare object, so no validator can catch a wrong key
+// here - the mock fixtures say "applicantName" and the real API says "fullName", and reading
+// only the first rendered an em-dash on every row against the live API. CR-5 proposes a
+// Service.nameField so this is declared rather than guessed; until then, take whichever the
+// application actually carries. One resolver for every view, so the queue and the report
+// cannot disagree about who applied.
+const NAME_KEYS = ["fullName", "applicantName", "name"] as const;
+
+export function applicantNameOf(fields: Record<string, unknown>): string | null {
+  for (const key of NAME_KEYS) {
+    const value = fields[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}

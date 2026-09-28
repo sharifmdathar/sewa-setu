@@ -8,6 +8,7 @@ import { RiskMeter, riskBand } from "@/components/RiskMeter";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StatusFilter } from "./status-filter";
 import { RiskFilter, type RiskBand } from "./risk-filter";
+import { applicantNameOf } from "@/lib/fields";
 import type { AppStatus } from "@/lib/api/types";
 
 export const dynamic = "force-dynamic";
@@ -30,21 +31,6 @@ const DEFAULT_STATUSES: AppStatus[] = STATUS_OPTIONS.filter(
 // table, so the filter and the row it matched can never disagree.
 const RISK_OPTIONS: RiskBand[] = ["high", "medium", "low"];
 
-// The contract types applicantFields as a bare object, so no validator can catch a wrong key
-// here - the mock fixtures say "applicantName" and the real API says "fullName", and reading
-// only the first rendered an em-dash on every row against the live API. CR-5 proposes a
-// Service.nameField so this is declared rather than guessed; until then, take whichever the
-// application actually carries.
-const NAME_KEYS = ["fullName", "applicantName", "name"] as const;
-
-function nameOf(fields: Record<string, unknown>): string {
-  for (const key of NAME_KEYS) {
-    const value = fields[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "—";
-}
-
 export default async function OfficerQueuePage({
   searchParams,
 }: {
@@ -61,7 +47,7 @@ export default async function OfficerQueuePage({
   for (const q of queue) {
     try {
       const app = await api.getApplication(q.applicationId);
-      rows.push({ q, applicant: nameOf(app.applicantFields) });
+      rows.push({ q, applicant: applicantNameOf(app.applicantFields) ?? "—" });
     } catch {
       /* app vanished mid-render — skip */
     }
