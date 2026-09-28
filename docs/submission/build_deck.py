@@ -278,7 +278,8 @@ def build() -> Path:
     ], widths=[0.55, 0.45])
 
     content(prs, 8, "Why the numbers can be trusted", [
-        ("310 automated tests passing, 2 skipped pending a paid model key.", True),
+        ("314 automated tests passing, 2 skipped: they need an LLM key in the environment, and "
+         "the test run has none.", True),
         ("Contract conformance is judged by a validator against openapi.yaml itself - in-process "
          "and over a real HTTP socket, not against a hand-written expectation.", False),
         ("Every eval figure regenerates from one command, and each report titles itself "
@@ -287,7 +288,7 @@ def build() -> Path:
          "socket - that is how we found a retry budget being multiplied, and fixed it.", False),
         ("", False),
         ("4,080 lines pipeline  ·  1,402 eval harness  ·  3,179 web  ·  1,052 generator  ·  "
-         "5,794 test lines", True),
+         "5,819 test lines", True),
     ], kicker="RIGOUR")
 
     content(prs, 9, "Contract-first, two tracks, one week", [

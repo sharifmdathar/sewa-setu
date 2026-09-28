@@ -3,29 +3,30 @@
 Order matters. Steps 1 and 2 are the two ways this demo fails silently: a server running old code,
 and a model in the loop turning a 3 ms call into a multi-second one.
 
-## 0. Known UI defect: the Applicant column will read "—" for every row
+## 0. Start the web app in real mode, or it is showing you a different store
 
-Found overnight by running the officer queue against the real API. It is a **Track B** one-liner,
-not an API problem, and it is visible in the queue you will show at 2:30.
+`API_MODE` defaults to `mock` (`apps/web/.env.example`) and this checkout has no `.env.local`, so the
+mode comes from the shell. A dev server restarted without it silently serves the mock fixtures: the
+queue still fills with names, so nothing *looks* wrong, and then every seeded application 404s the
+moment you open it. Start it the way the demo needs:
 
-The queue reads the applicant's name as `applicantFields["applicantName"]`
-(`apps/web/src/app/officer/page.tsx`, `nameOf`). The real API sends **`fullName`** — that is the key
-`pipeline/api/catalog.py` declares for all three services. So in mock mode the column fills, and in
-real mode every row shows `—`.
+```bash
+cd apps/web && API_MODE=real API_BASE_URL=http://localhost:8000 npm run dev
+```
 
-Verified: `GET /applications/APP-0001` → `applicantFields` has `fullName: "Anita Lohar"`, no
-`applicantName`; the mock fixtures declare `applicantName`.
+Prove which mode you are in before recording — the queue's names must match what the API says:
 
-**Fix for Track B:** read the name field the catalog declares (or fall back across
-`fullName`/`applicantName`) rather than hardcoding one key.
+```bash
+curl -s localhost:3000/officer | grep -c "Yogesh Mandvi"   # 0 => mock mode, wrong store
+curl -s localhost:8000/officer/queue | head -c 200
+```
 
-**For the recording if it is not fixed in time:** the column is cosmetic — every other part of the
-row (id, service, status, risk, updated) is real. Either say nothing and let the officer open a
-report (where the name appears correctly), or hide the column for the take.
-
-Why the conformance suite did not catch it: `applicantFields` is declared as a bare
-`{ type: object }` in the contract, so **no key name inside it is checkable**. That is the real
-gap, and `docs/change-requests/CR-5.md` proposes closing it.
+The `—`-on-every-row defect this section used to open with is fixed. `applicantNameOf` in
+`apps/web/src/lib/fields.ts` falls back across `fullName` / `applicantName` / `name`, the queue and
+the scrutiny report both call it (they used to read different keys, which is why the queue named a
+citizen the report called "Unknown applicant"), and `apps/web/src/lib/fields.test.ts` pins both
+shapes. `applicantFields` is still a bare `{ type: object }` in the contract — that is the gap
+`docs/change-requests/CR-5.md` proposes closing, and the reason a wrong key here was ever possible.
 
 ## 1. Make sure the API is running current code
 
